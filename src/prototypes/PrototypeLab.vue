@@ -7,6 +7,7 @@ import SchemeGridnik from './SchemeGridnik.vue'
 import SchemeModular from './SchemeModular.vue'
 import SchemeRiso from './SchemeRiso.vue'
 import SchemeBrutal from './SchemeBrutal.vue'
+import SchemeDither from './SchemeDither.vue'
 
 /**
  * 視覺原型實驗室——四個展場感方案並置比較（以 `?lab=1` 進入）。
@@ -62,6 +63,14 @@ const SCHEMES: Scheme[] = [
     risk: '高——推翻 D-003／MR-008，選它等於選色彩 C 案',
     component: SchemeBrutal,
   },
+  {
+    id: 'dither',
+    label: 'E 點陣顯影',
+    source: '用戶指定混合：B 站頭 + C 作品 + halftone 參考圖',
+    trait: '三層網點分級、製圖線、透視傾斜與浮離投影；切換時整片階梯顯影',
+    risk: '低——骨架無彩高對比，彩度全留給作品與 accent（＝色彩 B 案的強化版）',
+    component: SchemeDither,
+  },
 ]
 
 const FILTERS: { id: CategoryId | 'all'; label: string }[] = [
@@ -69,7 +78,7 @@ const FILTERS: { id: CategoryId | 'all'; label: string }[] = [
   ...CATEGORIES.map((category) => ({ id: category.id, label: category.label })),
 ]
 
-const schemeId = ref('modular')
+const schemeId = ref('dither')
 const activeFilter = ref<CategoryId | 'all'>('all')
 
 const scheme = computed(() => SCHEMES.find((item) => item.id === schemeId.value) ?? SCHEMES[0])
