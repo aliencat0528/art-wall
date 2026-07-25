@@ -8,6 +8,7 @@ import SchemeModular from './SchemeModular.vue'
 import SchemeRiso from './SchemeRiso.vue'
 import SchemeBrutal from './SchemeBrutal.vue'
 import SchemeDither from './SchemeDither.vue'
+import SchemeGlow from './SchemeGlow.vue'
 
 /**
  * 視覺原型實驗室——四個展場感方案並置比較（以 `?lab=1` 進入）。
@@ -65,11 +66,19 @@ const SCHEMES: Scheme[] = [
   },
   {
     id: 'dither',
-    label: 'E 點陣顯影',
-    source: '用戶指定混合：B 站頭 + C 作品 + halftone 參考圖',
-    trait: '三層網點分級、製圖線、透視傾斜與浮離投影；切換時整片階梯顯影',
+    label: 'E 數位展場',
+    source: '用戶指定混合：B 站頭 + C 作品 + 線框展場',
+    trait: '透視線框地板 + 牆面製圖網格 + 掃描線 + 邊緣刻度；表面全留白，無任何紋理',
     risk: '低——骨架無彩高對比，彩度全留給作品與 accent（＝色彩 B 案的強化版）',
     component: SchemeDither,
+  },
+  {
+    id: 'glow',
+    label: 'F 暗場光氛',
+    source: 'theroomlife 文章內的展場攝影（非該網站版型）',
+    trait: '暗場 + 聚光 + 浮塵 + 地面倒影；光打在作品上，不打在背景上',
+    risk: '中——推翻「白盒」但不推翻「中性」；暗展廳本就是美術館做法，作品不被染色',
+    component: SchemeGlow,
   },
 ]
 
