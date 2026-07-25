@@ -66,6 +66,36 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
 /** 「全部」的中性 accent 在暗場霓虹裡是一坨死灰，改用青藍當預設光色 */
 const glow = computed(() => (props.category ? props.accent : '#4fd6e8'))
 
+/**
+ * 疊印的第二個色版。
+ *
+ * 暗場的「疊印」與 Riso 那支不是同一件事：紙上的疊印是 multiply（墨愈疊愈暗），
+ * 暗場的疊印是 screen（光愈疊愈亮）。所以這裡做的是**色差錯位**——
+ * 兩道互補色的光框往反方向偏移，相交處加成出白光，等於沒對準的兩塊光版。
+ */
+function counterColour(hex: string): string {
+  const raw = hex.replace('#', '')
+  const r = parseInt(raw.slice(0, 2), 16) / 255
+  const g = parseInt(raw.slice(2, 4), 16) / 255
+  const b = parseInt(raw.slice(4, 6), 16) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+
+  let h = 0
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+  }
+  h = (h * 60 + 360) % 360
+
+  // 補色不取正 180 度——正補色在暗場會打架，偏 156 度既有色差又還算和諧
+  return `hsl(${(h + 156) % 360} 82% 62%)`
+}
+
+const counter = computed(() => counterColour(glow.value))
+
 const wallKey = computed(() => props.category?.id ?? 'all')
 
 /** 游標視差：光與塵反向走，作品微幅偏轉 */
@@ -87,6 +117,7 @@ function releasePointer(): void {
 const style = computed(() => ({
   '--accent': props.accent,
   '--glow': glow.value,
+  '--counter': counter.value,
   '--dust-near': DUST_NEAR,
   '--dust-far': DUST_FAR,
   '--mx': String(mx.value),
@@ -140,20 +171,22 @@ const style = computed(() => ({
             :alt="work.alt"
             loading="lazy"
           >
+          <!-- 疊印框線：兩道互補色光框往反方向錯位，screen 加成出沒對準的套印 -->
+          <span
+            class="glo__reg glo__reg--a"
+            aria-hidden="true"
+          />
+          <span
+            class="glo__reg glo__reg--b"
+            aria-hidden="true"
+          />
         </div>
 
-        <!-- 濕亮地板的倒影：整支方案最強的立體線索 -->
+        <!-- 光池：作品腳下的一灘光。取代倒影，一樣把作品「放」在地上而不是浮空 -->
         <span
-          class="glo__mirror"
+          class="glo__pool"
           aria-hidden="true"
-        >
-          <img
-            class="glo__mirror-img"
-            :src="work.thumb"
-            alt=""
-            loading="lazy"
-          >
-        </span>
+        />
 
         <figcaption class="glo__cap">
           <span class="glo__cap-title">{{ work.title }}</span>
@@ -345,18 +378,52 @@ const style = computed(() => ({
     box-shadow 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* 聚光：光從上方斜下打在作品上，下緣自然暗掉 */
+/* 聚光：一道實際的光斜打在作品上。
+   亮部集中在上緣三分之一、下緣壓暗，讓「光有方向」而不是整片提亮 */
 .glo__mount::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    var(--light, 168deg),
-    rgb(255 255 255 / 0.13),
-    transparent 42%,
-    rgb(4 4 8 / 0.34)
-  );
+  z-index: 1;
+  background:
+    radial-gradient(
+      86% 58% at 50% -12%,
+      color-mix(in srgb, var(--glow) 26%, rgb(255 255 255 / 0.34)),
+      transparent 62%
+    ),
+    linear-gradient(var(--light, 168deg), rgb(255 255 255 / 0.1), transparent 38%, rgb(4 4 8 / 0.42));
+  mix-blend-mode: screen;
   pointer-events: none;
+}
+
+/* 疊印框線：兩道錯位的光框，相交處加成出白光＝套印失準 */
+.glo__reg {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 620ms ease, box-shadow 620ms ease;
+}
+
+.glo__reg--a {
+  border-color: var(--glow);
+  box-shadow: 0 0 22px -6px var(--glow), inset 0 0 22px -10px var(--glow);
+  transform: translate(-7px, -6px);
+}
+
+.glo__reg--b {
+  border-color: var(--counter);
+  box-shadow: 0 0 22px -6px var(--counter), inset 0 0 22px -10px var(--counter);
+  transform: translate(7px, 6px);
+}
+
+/* hover 時兩版收攏對準——與 Riso 那支「套印失準→對準」是同一個動作的暗場版 */
+.glo__item:hover .glo__reg--a,
+.glo__item:hover .glo__reg--b {
+  transform: none;
 }
 
 .glo__item:nth-child(3n + 1) .glo__mount {
@@ -389,26 +456,25 @@ const style = computed(() => ({
   max-height: 52vh;
   aspect-ratio: var(--ar);
   object-fit: cover;
+  /* 被打亮的物件本身要比未打光時亮一點，光才落得到實處 */
+  filter: brightness(1.07) contrast(1.05);
 }
 
-/* 倒影：翻轉後往下淡出。scaleY(-1) 會把 mask 一起翻掉，
-   故用 translateY(-100%) 把它推回原位，遮罩才是「由上而下淡出」 */
-.glo__mirror {
+/* 光池：作品腳下的一灘光，取代倒影。
+   倒影是「地面會反射」，光池是「光打下來散開」——後者不複製作品內容，
+   畫面乾淨得多，但一樣把作品放在地上而不是浮空 */
+.glo__pool {
   display: block;
-  height: 42%;
-  overflow: hidden;
-  opacity: 0.34;
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 76%);
-  filter: blur(1.4px);
-}
-
-.glo__mirror-img {
-  display: block;
-  width: 100%;
-  aspect-ratio: var(--ar);
-  object-fit: cover;
-  transform: scaleY(-1) translateY(-100%);
-  transform-origin: top left;
+  height: 3.2rem;
+  margin-top: -0.4rem;
+  background: radial-gradient(
+    50% 100% at 50% 0%,
+    color-mix(in srgb, var(--glow) 42%, transparent),
+    transparent 72%
+  );
+  filter: blur(7px);
+  opacity: 0.75;
+  transition: background 620ms ease;
 }
 
 .glo__cap {
