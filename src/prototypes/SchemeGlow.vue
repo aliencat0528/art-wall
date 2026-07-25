@@ -138,8 +138,17 @@ const style = computed(() => ({
       aria-hidden="true"
     >
       <span class="glo__beam" />
+      <!-- F2 體積光：光柱穿過浮塵，光有形狀有邊界 -->
+      <span class="glo__shaft glo__shaft--a" />
+      <span class="glo__shaft glo__shaft--b" />
+      <span class="glo__shaft glo__shaft--c" />
       <span class="glo__dust glo__dust--far" />
       <span class="glo__dust glo__dust--near" />
+      <!-- F7 低處霧氣：作品下半沉進去 -->
+      <span class="glo__fog" />
+      <!-- F3 掃描光：切換時掃一次，之後定時再掃 -->
+      <span class="glo__sweep glo__sweep--cut" />
+      <span class="glo__sweep glo__sweep--amb" />
       <span class="glo__vignette" />
     </div>
 
@@ -220,6 +229,7 @@ const style = computed(() => ({
 
 .glo__beam,
 .glo__dust,
+.glo__sweep,
 .glo__vignette {
   position: absolute;
   inset: 0;
@@ -240,11 +250,96 @@ const style = computed(() => ({
       transparent 72%
     ),
     radial-gradient(58% 46% at 88% 22%, rgb(160 120 255 / 0.14), transparent 72%);
-  filter: blur(12px);
   transform: translate3d(calc(var(--mx, 0) * -26px), calc(var(--my, 0) * -16px), 0);
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
     background 620ms cubic-bezier(0.16, 1, 0.3, 1);
-  animation: glo-breathe 9s ease-in-out infinite;
+  /* F4 呼吸色牆：色相在 accent 附近極緩慢漂移。
+     幅度刻意壓在 ±20 度——再大就認不出這是哪個分類的顏色，
+     分類識別會被氛圍吃掉（這是選這個變體時就知道的代價） */
+  animation: glo-breathe 26s ease-in-out infinite;
+}
+
+/* F2 體積光：斜切的光柱。丁達爾效應的重點是光「有邊界」，
+   所以柱體本身要看得見輪廓，不能整片糊掉——blur 給得保守 */
+.glo__shaft {
+  position: absolute;
+  top: -30%;
+  height: 150%;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--glow) 34%, transparent),
+    color-mix(in srgb, var(--glow) 10%, transparent) 42%,
+    transparent 78%
+  );
+  filter: blur(22px);
+  mix-blend-mode: screen;
+  transition: background 620ms ease;
+}
+
+.glo__shaft--a {
+  left: 4%;
+  width: 15vw;
+  opacity: 0.72;
+  transform: skewX(-15deg) translate3d(calc(var(--mx, 0) * -34px), 0, 0);
+  animation: glo-shaft 13s ease-in-out infinite;
+}
+
+.glo__shaft--b {
+  left: 38%;
+  width: 22vw;
+  opacity: 0.5;
+  transform: skewX(9deg) translate3d(calc(var(--mx, 0) * -22px), 0, 0);
+  animation: glo-shaft 17s ease-in-out 2s infinite;
+}
+
+.glo__shaft--c {
+  right: 8%;
+  width: 12vw;
+  opacity: 0.4;
+  transform: skewX(-22deg) translate3d(calc(var(--mx, 0) * -42px), 0, 0);
+  animation: glo-shaft 21s ease-in-out 5s infinite;
+}
+
+/* F7 低處霧氣：貼著底部堆積，作品下半沉進去。
+   霧要慢到幾乎察覺不到在動，一快就變成煙霧特效 */
+.glo__fog {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 52%;
+  background:
+    radial-gradient(
+      64% 100% at 18% 108%,
+      color-mix(in srgb, var(--glow) 26%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(52% 100% at 74% 112%, rgb(174 156 255 / 0.16), transparent 74%),
+    linear-gradient(to top, rgb(236 233 242 / 0.07), transparent 68%);
+  filter: blur(34px);
+  mix-blend-mode: screen;
+  animation: glo-fog 38s ease-in-out infinite alternate;
+}
+
+/* F3 掃描光：一道窄光橫掃過整面牆 */
+.glo__sweep {
+  background: linear-gradient(
+    100deg,
+    transparent 42%,
+    color-mix(in srgb, var(--glow) 30%, rgb(255 255 255 / 0.22)) 50%,
+    transparent 58%
+  );
+  filter: blur(3px);
+  mix-blend-mode: screen;
+}
+
+/* 切換分類時掃一次——整層跟著 wallKey 重掛，動畫自然重播 */
+.glo__sweep--cut {
+  animation: glo-sweep 1250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 之後定時再掃，維持「這個空間是活的」 */
+.glo__sweep--amb {
+  opacity: 0.5;
+  animation: glo-sweep 9s cubic-bezier(0.45, 0, 0.55, 1) 6s infinite;
 }
 
 /* 浮塵兩層：遠的細而慢，近的大而快，差速給出空氣厚度 */
@@ -267,14 +362,48 @@ const style = computed(() => ({
   background: radial-gradient(88% 70% at 50% 42%, transparent 34%, rgb(4 4 8 / 0.82) 100%);
 }
 
+/* 呼吸：亮度與色相一起走，只有亮度變化會像燈壞了，加上色相才像燈在調光 */
 @keyframes glo-breathe {
   0%,
   100% {
-    opacity: 0.86;
+    opacity: 0.84;
+    filter: blur(12px) hue-rotate(-20deg);
   }
 
   50% {
     opacity: 1;
+    filter: blur(12px) hue-rotate(20deg);
+  }
+}
+
+@keyframes glo-shaft {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+
+  50% {
+    opacity: 0.78;
+  }
+}
+
+@keyframes glo-fog {
+  from {
+    transform: translate3d(-4%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(4%, 0, 0);
+  }
+}
+
+@keyframes glo-sweep {
+  from {
+    transform: translate3d(-115%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(115%, 0, 0);
   }
 }
 

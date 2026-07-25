@@ -96,9 +96,28 @@ const category = computed<Category | null>(() =>
   activeFilter.value === 'all' ? null : categoryOf(activeFilter.value),
 )
 
+/**
+ * 原型專用的有彩 accent 覆蓋。
+ *
+ * 內建六類裡，書法 `#3d3a35`（墨）與立體 `#6b6355`（石膏灰）幾乎無彩。
+ * 在 E 的無彩骨架上，色帶會變成一塊死灰板；在 F 的暗場光氛上，光根本發不出來——
+ * 那兩支的機制都建立在「有彩 accent」上。改用材料自身的顏色：印泥朱紅、陶土赭。
+ *
+ * 刻意只覆蓋在原型內，不動 `data/categories.ts`：方向未定案前不該讓已上線的
+ * 主站先變色。定案採用 E／F 時再把這兩個值寫回資料層，並補一筆決策覆蓋 MR-008。
+ */
+const CHROMATIC_ACCENT: Record<string, string> = {
+  calligraphy: '#b7332a',
+  sculpture: '#a9713d',
+}
+
 // 「全部」沒有分類色。ALL_THEME 的近黑（#1c1c1a）在方案 B／D 的大面積色塊上
 // 會變成一整塊黑板，看不出方案在講什麼，故原型改用中性暖灰當佔位。
-const accent = computed(() => category.value?.theme.accent ?? '#57534a')
+const accent = computed(() => {
+  const active = category.value
+  if (!active) return '#57534a'
+  return CHROMATIC_ACCENT[active.id] ?? active.theme.accent
+})
 
 const works = computed(() =>
   activeFilter.value === 'all'
