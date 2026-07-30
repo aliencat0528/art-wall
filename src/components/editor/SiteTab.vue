@@ -1,20 +1,14 @@
 <script setup lang="ts">
 import { inject } from 'vue'
-import type { BackgroundId } from '@/types'
-import { BACKGROUNDS } from '@/data/backgrounds'
 import { useLibrary } from '@/composables/useLibrary'
 import { useSettings } from '@/composables/useSettings'
 import { EDITOR_STATUS } from '@/components/editor/status'
 
-/** 站台分頁：整體背景、站台資訊、資料匯出匯入與還原 */
+/** 站台分頁：站台資訊、資料匯出匯入與還原（整體背景已於 MR-014 收成單一光氛，不再可切換） */
 
 const { settings, update } = useSettings()
 const { exportJson, importJson, restorePresets } = useLibrary()
 const { say, runBusy } = inject(EDITOR_STATUS)!
-
-function pickBackground(id: BackgroundId) {
-  update({ background: id })
-}
 
 async function onExport() {
   const json = await exportJson()
@@ -42,29 +36,6 @@ async function onImport(event: Event) {
 
 <template>
   <div>
-    <section class="block">
-      <h3 class="block__title">
-        整體背景
-      </h3>
-      <div class="swatches">
-        <button
-          v-for="background in BACKGROUNDS"
-          :key="background.id"
-          type="button"
-          class="swatch"
-          :class="{ 'is-active': settings.background === background.id }"
-          :style="{
-            background: background.tokens['--bg'],
-            color: background.tokens['--ink'],
-            borderColor: background.tokens['--line-strong'],
-          }"
-          @click="pickBackground(background.id)"
-        >
-          {{ background.label }}
-        </button>
-      </div>
-    </section>
-
     <section class="block">
       <h3 class="block__title">
         站台資訊
@@ -172,25 +143,6 @@ async function onImport(event: Event) {
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-bottom: 0.8rem;
-}
-
-.swatches {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.swatch {
-  padding: 1rem 0.6rem;
-  font-size: 0.76rem;
-  border: 1px solid;
-  border-radius: var(--card-radius);
-  cursor: pointer;
-  transition: box-shadow 200ms var(--ease);
-}
-
-.swatch.is-active {
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .field {

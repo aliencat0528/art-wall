@@ -1,9 +1,8 @@
 import { ref, watchEffect } from 'vue'
 import type { SiteSettings } from '@/types'
-import { DEFAULT_BACKGROUND } from '@/data/backgrounds'
 import { PROFILE } from '@/data/works'
 
-/** 站台設定：分頁標題、作者資訊、整體背景。存 localStorage，改了就生效 */
+/** 站台設定：分頁標題與作者資訊。存 localStorage，改了就生效 */
 
 const STORAGE_KEY = 'artwall.settings.v1'
 
@@ -12,13 +11,25 @@ const DEFAULTS: SiteSettings = {
   name: PROFILE.name,
   statement: PROFILE.statement,
   email: PROFILE.email,
-  background: DEFAULT_BACKGROUND,
 }
 
+/**
+ * 只收目前認得的欄位。
+ *
+ * 舊版存過 `background`（整體背景四選一，MR-014 已移除）——直接 spread 會把那筆
+ * 讀回記憶體再存回去，讓已經廢掉的欄位在 localStorage 裡永生。
+ */
 function load(): SiteSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<SiteSettings>) } : { ...DEFAULTS }
+    if (!raw) return { ...DEFAULTS }
+    const stored = JSON.parse(raw) as Partial<SiteSettings>
+    const next = { ...DEFAULTS }
+    for (const key of Object.keys(DEFAULTS) as (keyof SiteSettings)[]) {
+      const value = stored[key]
+      if (typeof value === 'string') next[key] = value
+    }
+    return next
   } catch {
     return { ...DEFAULTS }
   }

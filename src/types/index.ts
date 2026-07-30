@@ -119,26 +119,18 @@ export interface LibraryDocument {
   hidden: string[]
 }
 
-/** 整體視覺背景。只換中性層，不動分類主題 */
-export type BackgroundId = 'white-cube' | 'warm-paper' | 'concrete' | 'gallery-dark'
-
-export interface Background {
-  id: BackgroundId
-  label: string
-  /** 暗色底：分類強調色要改用 accentDark，否則墨色系會看不見 */
-  dark: boolean
-  /** 覆寫到 :root 的中性層 CSS 變數 */
-  tokens: Record<string, string>
-}
-
-/** 使用者可自訂的站台設定，存在 localStorage */
+/**
+ * 使用者可自訂的站台設定，存在 localStorage。
+ *
+ * MR-014 移除 `background`：整體背景不再四選一，站台一律是暗場光氛
+ * （中性層 token 直接寫死在 `styles/main.css`，見該檔頂部說明）。
+ */
 export interface SiteSettings {
   /** 瀏覽器分頁標題 */
   siteTitle: string
   name: string
   statement: string
   email: string
-  background: BackgroundId
 }
 
 /** 裝置寬度模式：寬螢幕走水平長廊，窄螢幕降級為垂直網格 */

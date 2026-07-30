@@ -145,9 +145,11 @@ const emit = defineEmits<{
   justify-content: space-between;
   gap: 1.25rem 2rem;
   padding: clamp(1.25rem, 3vw, 2rem) var(--page-x) 1rem;
-  /* 站頭底線用強調色：切換分類時整條線換色，是最不干擾作品又看得見的訊號 */
-  border-bottom: 2px solid var(--accent);
-  transition: border-color 320ms var(--ease);
+  /* 站頭底線用強調色：切換分類時整條線換色，是最不干擾作品又看得見的訊號。
+     暗場裡中性線會整條沉掉，故線本身要發光 */
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  box-shadow: 0 1px 24px -6px var(--accent);
+  transition: border-color 320ms var(--ease), box-shadow 320ms var(--ease);
 }
 
 .header__name {
@@ -157,6 +159,8 @@ const emit = defineEmits<{
   font-size: clamp(1.1rem, 2.4vw, 1.5rem);
   font-weight: 600;
   letter-spacing: 0.12em;
+  /* 字自己會發光，不靠底色撐 */
+  text-shadow: 0 0 32px color-mix(in srgb, var(--accent) 58%, transparent);
 }
 
 /* 姓名下的短強調線，跟著分類換色 */
@@ -168,6 +172,7 @@ const emit = defineEmits<{
   width: 2.4rem;
   height: 3px;
   background: var(--accent);
+  box-shadow: 0 0 16px -1px var(--accent);
   transition: background-color 320ms var(--ease), width 320ms var(--ease);
 }
 
@@ -218,6 +223,7 @@ const emit = defineEmits<{
 .mode.is-active {
   color: var(--accent);
   border-color: var(--accent);
+  box-shadow: 0 0 20px -8px var(--accent);
 }
 
 .filters {
@@ -265,17 +271,20 @@ const emit = defineEmits<{
   border-color: var(--line-strong);
 }
 
-/* 選中的分類：強調色外框 + 底色，深淺背景下都成立
-   （不靠固定的淺色底，否則暗展廳背景會整塊發亮） */
+/* 選中的分類：強調色外框 + 極淡的同色底（不用固定淺色底，那在暗場會整塊發亮） */
 .filter.is-active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
-  box-shadow: inset 0 -3px 0 var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent), 0 0 26px -8px var(--accent);
 }
 
 .filter.is-active .filter__code,
 .filter.is-active .filter__label {
   color: var(--accent);
+}
+
+.filter.is-active .filter__code {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .header__count {
