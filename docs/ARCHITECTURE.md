@@ -7,7 +7,6 @@ flowchart TD
   subgraph data["資料層"]
     W["works.ts<br/>內建作品 + PROFILE"]
     C["categories.ts<br/>內建六類 + 紋理預設 TEXTURE_PRESETS<br/>categoryOf 收口 / resolveCategory"]
-    B["backgrounds.ts<br/>四種背景（中性層 token）"]
   end
 
   subgraph storage["持久層（瀏覽器內，無後端）"]
@@ -19,14 +18,16 @@ flowchart TD
     UL["useLibrary.ts<br/>內建 + 自訂作品合併、CRUD、匯出匯入"]
     UG["useGallery.ts<br/>依媒材/依展覽模式、篩選、詳情選取、網址同步"]
     US["useSettings.ts<br/>站台設定、分頁標題"]
-    UA["useAppearance.ts<br/>把背景 + 分類主題寫進 :root"]
+    UA["useAppearance.ts<br/>把分類主題寫進 :root"]
     UM["useMediaQuery.ts<br/>長廊／網格切換、減少動態"]
+    UP["usePointerParallax.ts<br/>游標位置寫成 --mx / --my"]
   end
 
   subgraph view["視圖層"]
     APP["App.vue"]
     SH["SiteHeader.vue<br/>分類 / 展覽切換"]
-    WR["WorkRail.vue<br/>長廊／網格"]
+    GA["GalleryAtmosphere.vue<br/>暗場光氛（體積光／浮塵／掃描光／霧氣）"]
+    WR["WorkRail.vue<br/>長廊（景深＋拖曳＋逐件）／網格"]
     WC["WorkCard.vue"]
     WD["WorkDetail.vue"]
     IS["IntroSequence.vue"]
@@ -38,11 +39,11 @@ flowchart TD
   IDB --> UL
   UL --> UG
   C --> UA
-  B --> UA
-  US --> UA
   UG --> APP
   US --> APP
   UM --> WR
+  UP --> GA
+  APP --> GA
   APP --> SH
   APP --> WR
   APP --> WD
@@ -58,13 +59,14 @@ flowchart TD
 | 模組 | 職責 | 不負責 |
 |------|------|--------|
 | `data/works.ts` | 內建作品資料與作者預設值 | 使用者的編輯結果 |
-| `data/categories.ts` | 內建六類 + 紋理預設 `TEXTURE_PRESETS`；`categoryOf`（分類讀取唯一收口，孤兒回中性 fallback）、`resolveCategory`（自訂分類算完整 theme） | 中性色（那是背景的事） |
-| `data/backgrounds.ts` | 四種背景的中性層 token | 強調色 |
+| `data/categories.ts` | 內建六類 + 紋理預設 `TEXTURE_PRESETS`；`categoryOf`（分類讀取唯一收口，孤兒回中性 fallback）、`resolveCategory`（自訂分類算完整 theme） | 中性層 token（寫死在 `styles/main.css`） |
 | `composables/useLibrary.ts` | 作品／分類／展覽的合併與 CRUD、單一 document 持久化與 v1→v2 遷移、匯出匯入 | 篩選與選取 |
 | `composables/useGallery.ts` | 依媒材/依展覽模式、篩選與詳情選取、網址同步 | 資料從哪來 |
-| `composables/useAppearance.ts` | 兩層主題寫進 `:root` | 決定用哪個主題 |
+| `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
+| `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
+| `components/GalleryAtmosphere.vue` | 暗場光氛六層（主光暈／體積光／浮塵／霧氣／掃描光／暗角） | 作品本身的呈現 |
 | `composables/useSettings.ts` | 站台設定與分頁標題 | 作品資料 |
-| `utils/color.ts` | 由 accent 以 HSL 推導暗底 `accentDark`、對比度計算 | 顏色語意以外 |
+| `utils/color.ts` | 由 accent 以 HSL 推導暗底 `accentDark`、疊印第二色版 `counterAccent`、對比度計算 | 顏色語意以外 |
 | `utils/image.ts` | 壓縮成縮圖／詳情用圖、比例偵測 | 儲存 |
 | `utils/idb.ts` | IndexedDB 存取 | 資料語意 |
 | `utils/placeholder.ts` | 幾何佔位圖 | 真實圖片 |
@@ -86,21 +88,40 @@ flowchart TD
 4. metadata（不含 blob URL）寫進 localStorage
 5. 內建作品的編輯不改原始資料，只疊一層 `overrides`，可還原
 
-## 兩層主題系統
+## 主題系統：固定暗場 + 分類層
 
-正交設計：**任何背景 × 任何分類都要能看**。
+原本是兩層正交（整體背景四選一 × 分類主題，MR-009）。**MR-014 收成一層**：
+站台一律是暗場光氛，中性層不再是執行期可換的狀態。
 
 | 層 | 來源 | 控制的 CSS 變數 |
 |----|------|----------------|
-| 中性層 | `backgrounds.ts` | `--bg` `--surface` `--ink` `--ink-soft` `--ink-faint` `--line` `--line-strong` |
-| 分類層 | `categories.ts` | `--accent` `--texture` `--ease` `--card-radius` `--card-border` |
+| 中性層（固定） | `styles/main.css` 的 `:root` | `--bg` `--surface` `--ink` `--ink-soft` `--ink-faint` `--line` `--line-strong` |
+| 分類層（可換） | `categories.ts` → `useAppearance` | `--accent` `--counter` `--texture` `--ease` `--card-radius` `--card-border` |
 
-唯一的交叉點是強調色：`data-scheme="dark"` 時取 `accentDark`，否則取 `accent`。
-墨色（書法 `#3d3a35`）與石膏灰（立體 `#6b6355`）在暗底會整個消失，因此每個分類都必須備兩版——
-內建六類的 `accentDark` 手工調校；使用者自訂分類則由 `utils/color.ts` 從 accent 自動推導並驗暗底對比度。
+`--accent` 一律取分類的 `accentDark`（底永遠是暗的），它同時是**光氛的光色**：
+主光暈、體積光、聚光、光池、疊印框、站頭光暈全部吃這個值，所以它必須有彩——
+無彩 accent 在暗場只會糊成一團灰霧（書法／立體因此於 MR-014 改為印泥朱紅／陶土赭）。
+`--counter` 是疊印框的第二色版，由 `counterAccent` 推開 156 度色相算出。
 
-背景紋理鋪在 `body::before` 獨立圖層，暗色時整層 `filter: invert(1)`——
-紋理是黑線，不反相就看不見。
+內建六類的 `accentDark` 手工調校；使用者自訂分類由 `utils/color.ts` 從 accent 自動推導，
+並驗證對暗場底（`#08080d`）的對比度達 WCAG AA。
+
+背景紋理鋪在 `body::before` 獨立圖層並整層 `filter: invert(1)`——
+紋理是黑線，不反相在暗底就看不見。
+
+游標視差由 `usePointerParallax` 寫成 `--mx` / `--my`（-1～1）：光氛層與長廊都直接吃根節點
+的這兩個值，不逐層傳 props——「整個空間一起偏」本來就是根節點層級的事。
+
+## 長廊的景深與互動（MR-014）
+
+| 機制 | 實作 | 為什麼 |
+|------|------|--------|
+| `--focus`（0～1） | `WorkRail.measure()` 每帧算「距軌道中心的距離」寫在 `<li>` 上 | 一個值同時驅動偏轉、退遠、變暗、光池與聚光強度 |
+| 牆面偏轉 | 三張一循環 `--yaw` ±7deg，乘上 `1 - --focus` | 走到正前方自動轉正，不需 hover |
+| 景深遞減 | `translateZ(--depth + --focus × 36px)`，透明度下限 0.74 | 低於 0.74 會從「有距離」變成「蒙了灰」 |
+| 走道盡頭 | 軌道兩端 `mask-image` 漸隱 | 比再加一層透視線更省，也更像展場 |
+| 拖曳 | `pointerdown` 後在 **window** 上聽 move／up，超過 6px 才算拖曳 | `setPointerCapture` 會把 `click` 一起改派給軌道，作品就點不開了 |
+| 逐件停留 | 方向鍵／Home／End → `centreOn()` 捲到該件置中 | 原生方向鍵是「捲固定像素」，會停在兩件之間 |
 
 ## 版面尺寸的唯一真相
 
