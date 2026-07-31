@@ -89,6 +89,26 @@ flowchart TD
 5. 版面決定由誰渲染：`layout === 'hall'` 且未要求減少動態 → `GalleryHall`，否則 `WorkRail`。
    **版面與篩選是兩個正交的軸**（`?v=hall` 與 `?c=` / `?m=ex` 可並存），切版面不會洗掉篩選
 
+### 走廊模式的一步（MR-017）
+
+```mermaid
+flowchart LR
+  K["方向鍵 / BACK / WALK ON"] --> W["walk(delta)"]
+  W --> CS["clampStep()<br/>夾在 0 ~ total-1"]
+  CS -->|沒變| X["直接 return<br/>不重播動畫"]
+  CS -->|變了| ST["step 更新"]
+  ST --> CAM["cameraZ(step)<br/>→ --cam"]
+  ST --> FLAG["walking = true<br/>820ms 後歸零"]
+  CAM --> SCENE[".hall__scene<br/>translateZ(--cam)<br/>CSS transition 720ms"]
+  CAM --> ROOM["房間四個面<br/>translateZ(-cam) 抵銷<br/>＝跟著相機走"]
+  FLAG --> FLOW[".hall__flow<br/>流速 7s → 1.6s"]
+  ST --> VIS["isVisible() 決定渲染哪幾件<br/>isPassed() 決定淡出哪幾件<br/>isNear() 決定誰換 1800px 大圖"]
+```
+
+**三條分工**：相機位移與房間抵銷都是 CSS transition（合成層，不寫 rAF 迴圈）；
+地板流速只在走動的 820ms 內加快，是「我在移動」的回饋；
+可見窗口與圖源切換是純函式（`utils/hall.ts`），可單元測試。
+
 ### 寫入（上傳）
 
 1. `WorkForm` 選檔 → `detectAspect()` 立即把版位帶進表單
