@@ -309,12 +309,35 @@ onBeforeUnmount(() => {
   height: var(--rail-h);
   overflow: hidden;
   outline: none;
-  /* 半透明：讓底下的光氛層與顆粒透出來，走廊才不是貼在畫面上的一塊黑板。
-     中心較透＝消失點發亮，這是最便宜的一條縱深線索 */
+}
+
+/**
+ * 走廊的暗底**放在 `::before` 並且跟著淡出**，不能直接掛在 `.hall` 上。
+ *
+ * 掛在 `.hall` 上時它不吃 `.hall__viewport` 的 mask，於是「有壓暗」與「沒壓暗」
+ * 在走廊上下緣突然切換——明暗突變會被眼睛讀成一條橫線，也就是那個
+ * 「上下黑色框線的邊界感」。實測把光氛層整個隱藏，那條線就消失，
+ * 證明它不是任何元素的 border，是這個對比邊。
+ *
+ * 中心較透＝消失點發亮，這是最便宜的一條縱深線索。
+ */
+.hall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: radial-gradient(
     118% 78% at 50% 42%,
     rgb(9 9 17 / 0.04),
     rgb(4 4 9 / 0.38) 74%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 8%,
+    #000 86%,
+    transparent 100%
   );
 }
 
