@@ -174,6 +174,12 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         >
           <span class="hall__flow" />
+          <span class="hall__ripple" />
+          <span
+            v-if="walking"
+            :key="`pulse-${step}`"
+            class="hall__pulse"
+          />
         </span>
 
         <button
@@ -271,8 +277,8 @@ onBeforeUnmount(() => {
      中心較透＝消失點發亮，這是最便宜的一條縱深線索 */
   background: radial-gradient(
     118% 78% at 50% 42%,
-    rgb(9 9 17 / 0.12),
-    rgb(4 4 9 / 0.62) 72%
+    rgb(9 9 17 / 0.04),
+    rgb(4 4 9 / 0.38) 74%
   );
 }
 
@@ -366,11 +372,11 @@ onBeforeUnmount(() => {
     ),
     linear-gradient(
       to right,
-      rgb(17 17 27 / 0.84) 0%,
-      rgb(11 11 20 / 0.52) 52%,
-      rgb(8 8 15 / 0.16) 100%
+      rgb(17 17 27 / 0.52) 0%,
+      rgb(11 11 20 / 0.26) 52%,
+      rgb(8 8 15 / 0.06) 100%
     ),
-    linear-gradient(to bottom, rgb(22 22 33 / 0.45), rgb(8 8 14 / 0.55));
+    linear-gradient(to bottom, rgb(22 22 33 / 0.2), rgb(8 8 14 / 0.26));
 }
 
 /* 轉 90 度後局部 +X＝往場景深處，故往觀者延伸是 translateX 負值 */
@@ -381,11 +387,21 @@ onBeforeUnmount(() => {
   transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) translateX(calc(var(--near) * -1));
 }
 
+/**
+ * 右牆的 transform 與左牆**完全相同**，只有 `left` 不同。
+ *
+ * 原本多了一個 `scaleX(-1)` 想把漸層鏡像過來，結果**把後續 `translateX` 的方向
+ * 一起反轉**了——右牆不是往觀者延伸 `--near`，而是往深處縮了 `--near`，
+ * 近端切面就露在畫面右側，變成一塊有直角邊的長方形。
+ * 暗色 accent 下混在暗背景裡看不出來，換到淺色 accent（新媒體）就一眼看到。
+ *
+ * 拿掉 `scaleX(-1)` 之後，兩道牆的近端位置與漸層方向都一致。
+ * 法線朝向確實左右相反，但牆是純漸層、沒有 `backface-visibility`，看不出差別。
+ */
 .hall__wall--r {
   left: calc(50% + var(--half));
   transform-origin: left center;
-  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) scaleX(-1)
-    translateX(calc(var(--near) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) translateX(calc(var(--near) * -1));
 }
 
 /* 天花板：參考圖有，第一版漏了，於是畫面上緣直接穿幫露出背景光氛 */
@@ -408,7 +424,7 @@ onBeforeUnmount(() => {
    * 天花板變成「暗處的一個面」而不是「貼上去的黑板」。
    * 白色那版試過並退回（`5ecda0c` / `c4f967d`）——問題從來不是顏色，是不透明度。
    */
-  background: linear-gradient(to top, rgb(14 14 24 / 0.3), rgb(8 8 14 / 0.04) 58%);
+  background: linear-gradient(to top, rgb(14 14 24 / 0.16), rgb(8 8 14 / 0.02) 54%);
 }
 
 .hall__floor {
@@ -430,7 +446,7 @@ onBeforeUnmount(() => {
       transparent 1px 150px
     ),
     /* 同天花板：近端從 0.82 壓到 0.34，地板才不是畫面下緣的一塊黑區 */
-    linear-gradient(to bottom, rgb(6 6 11 / 0.34), rgb(6 6 11 / 0.06));
+    linear-gradient(to bottom, rgb(6 6 11 / 0.18), rgb(6 6 11 / 0.03));
 }
 
 /**
@@ -471,6 +487,79 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 
+/**
+ * 第二層流動：**週期與速度都和第一層不同**（900px／11s vs 640px／7s）。
+ *
+ * 兩層等速等距只會看成「一組線在平移」；錯開之後兩者時而重疊時而錯開，
+ * 起伏是自己長出來的，不是畫出來的——水波與銀河那種綿延感來自這裡。
+ * 邊界用大範圍的軟漸層（不是硬邊），才不會讀成掃描線。
+ */
+.hall__ripple {
+  position: absolute;
+  inset: -100% 0 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 240px,
+    color-mix(in srgb, var(--accent) 9%, transparent) 430px 470px,
+    transparent 660px 900px
+  );
+  animation: hall-ripple var(--ripple-dur, 11s) linear infinite;
+  will-change: transform;
+}
+
+@keyframes hall-ripple {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(900px);
+  }
+}
+
+/**
+ * 走動的波前：**每走一步射出一道往深處推的光帶**。
+ *
+ * 解的是「有沒有真的換到下一件」這個回饋——相機補間只有 720ms、
+ * 且作品之間相似時，光看畫面很難確定自己動了。
+ * 這道波前從腳下出發、穿過走廊、在下一件附近散掉，等於把「這一步」畫出來，
+ * 也把前後兩件視覺上串起來。
+ *
+ * 用 `:key="step"` 讓 Vue 每步重建這個元素——CSS 動畫只在元素建立時從頭播，
+ * 靠切 class 在連續走動時不會重播（class 還沒被移掉）。
+ */
+.hall__pulse {
+  position: absolute;
+  inset: -100% 0 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in srgb, var(--accent) 34%, transparent) 46%,
+    color-mix(in srgb, var(--counter) 20%, transparent) 52%,
+    transparent 100%
+  );
+  background-size: 100% 520px;
+  background-repeat: no-repeat;
+  background-position: 0 50%;
+  animation: hall-pulse 1s var(--ease) both;
+}
+
+@keyframes hall-pulse {
+  from {
+    transform: translateY(-260px);
+    opacity: 0;
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(1500px);
+    opacity: 0;
+  }
+}
+
 @keyframes hall-flow {
   from {
     transform: translateY(0);
@@ -486,6 +575,10 @@ onBeforeUnmount(() => {
    只改變數不重設 animation，動畫才不會在切換的瞬間跳回起點 */
 .hall.is-walking .hall__flow {
   --flow-dur: 1.6s;
+}
+
+.hall.is-walking .hall__ripple {
+  --ripple-dur: 2.6s;
 }
 
 /**
@@ -704,7 +797,9 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .hall__flow {
+  .hall__flow,
+  .hall__ripple,
+  .hall__pulse {
     animation: none;
   }
 }

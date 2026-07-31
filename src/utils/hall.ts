@@ -34,12 +34,21 @@ export function cameraZ(step: number, spacing: number = HALL_SPACING): number {
  * 沒有這一段的話，第 n 件的深度剛好等於第 n 步的相機位置——作品會貼在
  * 相機所在平面上。留一個站距，走到它面前才是「站在作品前」而不是「臉貼上去」。
  *
- * 改成正對螢幕的看板之後（MR-018）這個值要**縮到很短**。當前那件永遠停在
- * `z = -HALL_LEAD`，透視縮放就是 `perspective / (perspective + LEAD)`——
- * LEAD 150 時只有 0.81 倍，作品反而比原尺寸小，畫面讀起來很遠。
- * 40 時是 0.94 倍，接近 1:1，才有「站在它前面」的近距離感。
+ * 改成正對螢幕的看板之後（MR-018）這個值要**縮到很短，甚至為負**。
+ * 當前那件永遠停在 `z = -HALL_LEAD`，透視縮放就是
+ * `perspective / (perspective + LEAD)`：
+ *
+ * | LEAD | 縮放 | 讀起來 |
+ * |------|------|--------|
+ * | 150 | 0.81 | 比原尺寸小，很遠 |
+ * | 40 | 0.94 | 接近 1:1 |
+ * | **-90** | **1.17** | 跨到投影面前方，「站在它面前」 |
+ *
+ * 負值代表作品在投影面與觀者之間。上限是 `perspective`（620）——
+ * 到那裡就會穿過相機平面。已走過的那件在 `z = spacing - LEAD = 810`，
+ * 確實越過了相機平面，但它 `opacity: 0`，看不到也點不到。
  */
-export const HALL_LEAD = 40
+export const HALL_LEAD = -90
 
 export interface HallSlot {
   /** 掛在哪面牆。偶數件在左、奇數件在右，兩側交錯才像走廊 */
