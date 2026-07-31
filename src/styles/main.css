@@ -90,14 +90,15 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27180%27 height=%27180%27%3E%3Cfilter id=%27g%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.86%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23g)%27/%3E%3C/svg%3E');
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27180%27 height=%27180%27%3E%3Cfilter id=%27g%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.7%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23g)%27/%3E%3C/svg%3E');
   background-repeat: repeat;
   /* overlay 而非 soft-light：soft-light 會把整片近黑的底一起推亮（實測黑點從
      #08080d 浮起來，暗場的深度就沒了）。overlay 在暗處維持暗、只在有光的地方
      顯出顆粒——正好是印刷品的樣子：油墨厚的地方才看得到紙紋 */
   mix-blend-mode: overlay;
-  /* 0.7：實測 0.5 在亮處幾乎看不出顆粒，0.9 開始像雜訊而不是紙紋 */
-  opacity: 0.7;
+  /* 0.9：0.5 幾乎看不出、0.7 仍要貼著螢幕才看得到（實測）。
+     baseFrequency 也從 0.86 降到 0.7——顆粒粗一點才在一般觀看距離讀得出來 */
+  opacity: 0.9;
   pointer-events: none;
 }
 

@@ -122,9 +122,9 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 
 | 機制 | 實作 | 界線與代價 |
 |------|------|-----------|
-| 顆粒 | `body::after` 鋪一張 feTurbulence 靜態噪點，`mix-blend-mode: overlay`、opacity 0.7 | z-index -1＝畫在光之上、**所有內容之下**，顆粒落在牆面不落在作品。零動畫，只光柵化一次 |
-| 疊印色場 | 光氛層三顆 `blur(60px)` 色圓（accent × 2、counter × 1），34～47s 各自漂移 | 呼吸用 `opacity` 不用 `scale`——縮放會逼模糊層每帧重新光柵化。動 `translate` 獨立屬性，把 `transform` 留給視差 |
-| 游標殘像 | `usePointerAfterimage` 每帧 lerp 出快慢兩組座標（0.22／0.10）寫成 `--trail-*`，停 0.7s 後 `--trail-on` 歸零 | 只掛 `mousemove`；rAF 在追上且閒置時自行收掉，不留常駐迴圈。`@media (hover: none)` 另外擋掉觸控裝置 |
+| 顆粒 | `body::after` 鋪一張 feTurbulence 靜態噪點（`baseFrequency` 0.7），`mix-blend-mode: overlay`、opacity 0.9 | z-index -1＝畫在光之上、**所有內容之下**，顆粒落在牆面不落在作品。零動畫，只光柵化一次 |
+| 疊印色場 | 光氛層三顆 `blur(48px)` 色圓（accent 46%／32%、counter 42%），34～47s 各自漂移 | 呼吸用 `opacity` 不用 `scale`——縮放會逼模糊層每帧重新光柵化。動 `translate` 獨立屬性，把 `transform` 留給視差 |
+| 游標殘像 | `usePointerAfterimage` 每帧 lerp 出快慢兩組座標（0.22／0.10）寫成 `--trail-*`，停 0.7s 後 `--trail-on` 歸零 | **自成 `z-index: 40` 一層、不在光氛層內**：光氛是 `z-index: -1` 的堆疊脈絡，放裡面會被作品蓋掉，而長廊上作品佔掉大半畫面。40 在詳情頁（80）之下。只掛 `mousemove`，rAF 追上且閒置時自行收掉；`@media (hover: none)` 擋掉觸控裝置 |
 | 拖曳套色錯位 | 長廊拖曳速度 → `misregFor()` → 軌道上的 `--misreg`，卡片兩塊疊印光版的位移乘上它 | 拖曳中拿掉過渡（否則慢半拍），放手回到 1 就自然彈回；`prefers-reduced-motion` 下整條不啟用 |
 
 ## 長廊的景深與互動（MR-014）

@@ -15,7 +15,8 @@
  *
  * MR-016 再加兩種，兩者都是 Risograph 疊印的機制而非裝飾：
  *   7. 疊印色場 `ink`——三顆半透明色圓各自漂移，重疊處自己混出第三個顏色
- *   8. 游標殘像 `trail`——兩顆不同色、不同延遲的色圓追著游標，停下就散開
+ *   8. 游標殘像 `trail`——兩顆不同色、不同延遲的色圓追著游標，停下就散開。
+ *      這一項**不在光氛層內**，自成 `z-index: 40` 的一層畫在作品之上（見下方註解）
  *
  * 為什麼暗場不違反 D-003／MR-008 的中性定調：美術館暗展廳本來就這樣做。
  * 關鍵是**光打在作品上、不打在背景上**——彩色光暈只出現在作品外圍與站頭，
@@ -87,9 +88,21 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
     <span class="atmo__fog" />
     <span class="atmo__sweep atmo__sweep--cut" />
     <span class="atmo__sweep atmo__sweep--amb" />
+    <span class="atmo__vignette" />
+  </div>
+
+  <!--
+    殘像自成一層，不放在 .atmo 裡：.atmo 是 `z-index: -1` 的堆疊脈絡，
+    子層再怎麼排也升不到內容之上，游標一移到作品上殘像就被蓋掉（而長廊上
+    作品佔掉大半畫面）。拉出來後它是「跟著游標的一盞燈」——screen 疊加，
+    與 MR-014 卡片聚光同一個原理，光打在作品上而非鋪一層色。
+  -->
+  <div
+    class="trail"
+    aria-hidden="true"
+  >
     <span class="atmo__trail atmo__trail--b" />
     <span class="atmo__trail atmo__trail--a" />
-    <span class="atmo__vignette" />
   </div>
 </template>
 
@@ -138,7 +151,7 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
 .atmo__ink {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
+  filter: blur(48px);
   mix-blend-mode: screen;
   will-change: transform;
 }
@@ -150,7 +163,7 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   height: 46vw;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, var(--accent) 34%, transparent),
+    color-mix(in srgb, var(--accent) 46%, transparent),
     transparent 68%
   );
   transform: translate3d(calc(var(--mx, 0) * -30px), calc(var(--my, 0) * -18px), 0);
@@ -165,7 +178,7 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   height: 38vw;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, var(--counter) 30%, transparent),
+    color-mix(in srgb, var(--counter) 42%, transparent),
     transparent 66%
   );
   transform: translate3d(calc(var(--mx, 0) * -18px), calc(var(--my, 0) * -10px), 0);
@@ -179,11 +192,20 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   height: 52vw;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 32%, transparent),
     transparent 70%
   );
   transform: translate3d(calc(var(--mx, 0) * 24px), calc(var(--my, 0) * 14px), 0);
   animation: atmo-ink-c 47s ease-in-out infinite alternate;
+}
+
+/* 40：在作品之上，但在詳情頁（80）、編輯面板（90）、開場（100）之下——
+   彈窗開著時不該還有一盞燈在上面晃 */
+.trail {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
 }
 
 /* 游標殘像：兩顆不同色、不同延遲的色圓（座標由 usePointerAfterimage 寫成 CSS 變數）。
@@ -194,7 +216,7 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   left: 0;
   border-radius: 50%;
   opacity: calc(var(--trail-on, 0) * 1);
-  filter: blur(42px);
+  filter: blur(26px);
   mix-blend-mode: screen;
   transition: opacity 620ms ease;
   will-change: transform;
@@ -205,8 +227,8 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   height: 17rem;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, var(--accent) 40%, transparent),
-    transparent 64%
+    color-mix(in srgb, var(--accent) 62%, transparent),
+    transparent 66%
   );
   transform: translate3d(
     calc(var(--trail-ax, 50vw) - 8.5rem),
@@ -220,8 +242,8 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   height: 21rem;
   background: radial-gradient(
     circle at 50% 50%,
-    color-mix(in srgb, var(--counter) 32%, transparent),
-    transparent 66%
+    color-mix(in srgb, var(--counter) 52%, transparent),
+    transparent 68%
   );
   transform: translate3d(
     calc(var(--trail-bx, 50vw) - 10.5rem),
