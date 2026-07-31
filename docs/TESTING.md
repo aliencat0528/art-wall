@@ -71,10 +71,15 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 > 是同時有數個分頁在跑常駐動畫把 rAF 節流掉了。2 個 worker 下總時長約 33 秒。
 
 **走廊模式（MR-017）測的就是用戶指定的三條硬要求**——不卡住、不跑版、作品點得開。
-`e2e/hall.spec.js` 12 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
+`e2e/hall.spec.js` 13 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
 連按不掉步、**不撐出水平捲軸**、**走動後仍點得開作品**、切回牆面收乾淨且篩選還在、
 方向鍵不必先點畫面、減少動態不提供入口，以及**窄螢幕的降級版仍不跑版、仍點得開**。透視好不好看不測（視覺量值），
 純幾何在 `src/utils/hall.spec.ts`。
+
+> **溢出測試要「走過去」才守得住**：走廊裡作品的投影寬度取決於**當前那件的比例**
+> ——直幅只有 260px 寬、橫幅是 520px。站在入口（第 1 件是直幅）量不出問題，
+> 走到橫幅那件才會看到它整個跑出視窗（1024 寬時實測 623→1113）。
+> 原本的溢出測試只在 1280 寬走 3 步，剛好都停在直幅上，等於沒守到。
 
 > **走廊的點擊測試要指名 `data-index`，不能用 `.first()`**：可見窗口會保留相機後方
 > 一件，它在畫面上等於不存在，但 `boundingBox()` 仍算得出來，點下去只會打到底下的容器。
@@ -88,7 +93,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 35 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 36 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 
