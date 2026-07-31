@@ -249,16 +249,18 @@ const ratio = computed(() => ASPECT_RATIO[props.work.aspect])
   transition: transform 320ms var(--ease), border-color 620ms var(--ease);
 }
 
+/* `--misreg` 由長廊在拖曳時寫在軌道上（MR-016），靜止時是 1＝原本的錯位量。
+   拖得越快分得越開，放手彈回——套色沒對準是印的物理，不是裝飾 */
 .card__reg--a {
   border-color: var(--accent);
   box-shadow: 0 0 22px -6px var(--accent), inset 0 0 22px -10px var(--accent);
-  transform: translate(-7px, -6px);
+  transform: translate(calc(-7px * var(--misreg, 1)), calc(-6px * var(--misreg, 1)));
 }
 
 .card__reg--b {
   border-color: var(--counter);
   box-shadow: 0 0 22px -6px var(--counter), inset 0 0 22px -10px var(--counter);
-  transform: translate(7px, 6px);
+  transform: translate(calc(7px * var(--misreg, 1)), calc(6px * var(--misreg, 1)));
 }
 
 /* hover 時兩塊光版收攏對準——「套印失準 → 對準」的暗場版 */

@@ -13,6 +13,11 @@
  *   5. 掃描光 `sweep`——切換分類時掃一次，之後定時再掃，維持「這個空間是活的」
  *   6. 暗角 `vignette`——壓下邊緣，視線自然收到中間的作品
  *
+ * MR-016 再加兩種，兩者都是 Risograph 疊印的機制而非裝飾：
+ *   7. 疊印色場 `ink`——三顆半透明色圓各自漂移，重疊處自己混出第三個顏色
+ *   8. 游標殘像 `trail`——兩顆不同色、不同延遲的色圓追著游標，停下就散開。
+ *      這一項**不在光氛層內**，自成 `z-index: 40` 的一層畫在作品之上（見下方註解）
+ *
  * 為什麼暗場不違反 D-003／MR-008 的中性定調：美術館暗展廳本來就這樣做。
  * 關鍵是**光打在作品上、不打在背景上**——彩色光暈只出現在作品外圍與站頭，
  * 圖面本身不覆蓋任何色層。真正會吃掉作品顏色的是「背景鋪滿彩色」，不是「背景很暗」。
@@ -72,6 +77,9 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
     aria-hidden="true"
   >
     <span class="atmo__beam" />
+    <span class="atmo__ink atmo__ink--a" />
+    <span class="atmo__ink atmo__ink--b" />
+    <span class="atmo__ink atmo__ink--c" />
     <span class="atmo__shaft atmo__shaft--a" />
     <span class="atmo__shaft atmo__shaft--b" />
     <span class="atmo__shaft atmo__shaft--c" />
@@ -81,6 +89,20 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
     <span class="atmo__sweep atmo__sweep--cut" />
     <span class="atmo__sweep atmo__sweep--amb" />
     <span class="atmo__vignette" />
+  </div>
+
+  <!--
+    殘像自成一層，不放在 .atmo 裡：.atmo 是 `z-index: -1` 的堆疊脈絡，
+    子層再怎麼排也升不到內容之上，游標一移到作品上殘像就被蓋掉（而長廊上
+    作品佔掉大半畫面）。拉出來後它是「跟著游標的一盞燈」——screen 疊加，
+    與 MR-014 卡片聚光同一個原理，光打在作品上而非鋪一層色。
+  -->
+  <div
+    class="trail"
+    aria-hidden="true"
+  >
+    <span class="atmo__trail atmo__trail--b" />
+    <span class="atmo__trail atmo__trail--a" />
   </div>
 </template>
 
@@ -121,6 +143,113 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   /* 呼吸：色相在 accent 附近極緩慢漂移。幅度壓在 ±20 度——再大就認不出
      這是哪個分類的顏色，分類識別會被氛圍吃掉（選這個效果時就知道的代價） */
   animation: atmo-breathe 26s ease-in-out infinite;
+}
+
+/* 疊印色場（MR-016）：三顆半透明色圓，各自不同週期地漂移與呼吸。
+   screen＝光愈疊愈亮（暗場版的 multiply 疊印）；圓與圓重疊處自己混出第三個顏色，
+   這就是 Risograph 兩色套印的機制。整層在 z-index -1，永遠在作品之下 */
+.atmo__ink {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.atmo__ink--a {
+  top: -14%;
+  left: -8%;
+  width: 46vw;
+  height: 46vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--accent) 46%, transparent),
+    transparent 68%
+  );
+  transform: translate3d(calc(var(--mx, 0) * -30px), calc(var(--my, 0) * -18px), 0);
+  animation: atmo-ink-a 34s ease-in-out infinite alternate;
+}
+
+/* 第二版刻意偏移一點：套色沒對準才是疊印，對齊了就只是一團光 */
+.atmo__ink--b {
+  top: -6%;
+  left: 2%;
+  width: 38vw;
+  height: 38vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--counter) 42%, transparent),
+    transparent 66%
+  );
+  transform: translate3d(calc(var(--mx, 0) * -18px), calc(var(--my, 0) * -10px), 0);
+  animation: atmo-ink-b 41s ease-in-out infinite alternate;
+}
+
+.atmo__ink--c {
+  right: -12%;
+  bottom: -18%;
+  width: 52vw;
+  height: 52vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--accent) 32%, transparent),
+    transparent 70%
+  );
+  transform: translate3d(calc(var(--mx, 0) * 24px), calc(var(--my, 0) * 14px), 0);
+  animation: atmo-ink-c 47s ease-in-out infinite alternate;
+}
+
+/* 40：在作品之上，但在詳情頁（80）、編輯面板（90）、開場（100）之下——
+   彈窗開著時不該還有一盞燈在上面晃 */
+.trail {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* 游標殘像：兩顆不同色、不同延遲的色圓（座標由 usePointerAfterimage 寫成 CSS 變數）。
+   `--trail-on` 在游標停住 0.7 秒後歸零，色圓淡出——殘像本來就該散掉 */
+.atmo__trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  opacity: calc(var(--trail-on, 0) * 1);
+  filter: blur(26px);
+  mix-blend-mode: screen;
+  transition: opacity 620ms ease;
+  will-change: transform;
+}
+
+.atmo__trail--a {
+  width: 17rem;
+  height: 17rem;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--accent) 62%, transparent),
+    transparent 66%
+  );
+  transform: translate3d(
+    calc(var(--trail-ax, 50vw) - 8.5rem),
+    calc(var(--trail-ay, 50vh) - 8.5rem),
+    0
+  );
+}
+
+.atmo__trail--b {
+  width: 21rem;
+  height: 21rem;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--counter) 52%, transparent),
+    transparent 68%
+  );
+  transform: translate3d(
+    calc(var(--trail-bx, 50vw) - 10.5rem),
+    calc(var(--trail-by, 50vh) - 10.5rem),
+    0
+  );
 }
 
 /* 體積光：柱體本身要看得見輪廓，不能整片糊掉 */
@@ -235,6 +364,48 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
   }
 }
 
+/* 色場漂移：位移幅度都在 6vw 以內，慢到像空間本身在呼吸而不是有東西在動。
+   動的是 `translate` 這個獨立屬性而非 `transform`——元素上的 `transform` 要留給
+   游標視差，寫進同一個屬性會被動畫整個蓋掉，視差就失效了。
+
+   呼吸用 opacity 不用 scale：這幾層帶 60px 模糊，縮放會逼瀏覽器每帧重新光柵化
+   整片模糊，位移與透明度則只是合成，成本差一個數量級 */
+@keyframes atmo-ink-a {
+  from {
+    opacity: 0.82;
+    translate: -3vw -2vh;
+  }
+
+  to {
+    opacity: 1;
+    translate: 4vw 3vh;
+  }
+}
+
+@keyframes atmo-ink-b {
+  from {
+    opacity: 1;
+    translate: 3vw 2vh;
+  }
+
+  to {
+    opacity: 0.78;
+    translate: -4vw -3vh;
+  }
+}
+
+@keyframes atmo-ink-c {
+  from {
+    opacity: 0.9;
+    translate: 2vw 3vh;
+  }
+
+  to {
+    opacity: 1;
+    translate: -5vw -2vh;
+  }
+}
+
 @keyframes atmo-shaft {
   0%,
   100% {
@@ -291,7 +462,16 @@ const DUST_FAR = dust('far', 220, 34, 0.8)
 @media (max-width: 599px) {
   .atmo__shaft,
   .atmo__dust,
-  .atmo__sweep--amb {
+  .atmo__sweep--amb,
+  .atmo__ink--c {
+    display: none;
+  }
+}
+
+/* 殘像只在有游標的裝置出現。觸控裝置根本不會收到 mousemove，這條是保險：
+   萬一有筆／滑鼠混用的裝置給了假事件，也不會在手機上多出兩顆常駐色圓 */
+@media (hover: none) {
+  .atmo__trail {
     display: none;
   }
 }

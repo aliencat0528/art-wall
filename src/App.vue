@@ -11,6 +11,7 @@ import { useGallery } from '@/composables/useGallery'
 import { useLibrary } from '@/composables/useLibrary'
 import { usePrefersReducedMotion } from '@/composables/useMediaQuery'
 import { usePointerParallax } from '@/composables/usePointerParallax'
+import { usePointerAfterimage } from '@/composables/usePointerAfterimage'
 import { useSettings } from '@/composables/useSettings'
 
 const {
@@ -37,6 +38,7 @@ const { init } = useLibrary()
 
 useAppearance(activeCategory)
 usePointerParallax()
+usePointerAfterimage()
 
 const reducedMotion = usePrefersReducedMotion()
 const editorOpen = ref(false)

@@ -44,8 +44,14 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 **雙指縮放沒有自動化測試**——Playwright 專案只設 chromium 桌機、無觸控模擬，
 這條目前靠手動驗，是已知缺口。
 
+**疊印視覺（MR-016）同樣只測行為不測長相**：色圓位置、模糊半徑、顆粒濃度都是視覺量值。
+`e2e/atmosphere.spec.js` 測三件會真的壞掉的事——殘像跟得上游標且快慢兩顆不重合、
+停下來會散掉、拖曳推開套色錯位且放手彈回；純數學（`lerp`／`misregFor`）在 `utils/motion.spec.ts`。
+> **rAF 只在分頁可見時才跑**：用 AI 瀏覽器手動驗殘像會看到「完全沒動」，那是分頁沒聚焦、
+> `requestAnimationFrame` 被節流，不是壞掉。要驗這一類東西就走 Playwright。
+
 > **E2E 超時要先懷疑資源競爭**：光氛層有常駐動畫，若同時開著 dev server 與另一個
-> 開著本站的瀏覽器分頁，整套 20 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
+> 開著本站的瀏覽器分頁，整套 23 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
 > 先關掉再重跑，不要急著改測試。
 
 ## 測試流程報告（四段式）
@@ -55,7 +61,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 76 tests 全過；build 產出 `dist/`；E2E 20 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 83 tests 全過；build 產出 `dist/`；E2E 23 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 
