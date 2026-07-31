@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import EditorPanel from '@/components/EditorPanel.vue'
 import GalleryAtmosphere from '@/components/GalleryAtmosphere.vue'
+import GalleryHall from '@/components/GalleryHall.vue'
 import IntroSequence from '@/components/IntroSequence.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import WorkDetail from '@/components/WorkDetail.vue'
@@ -9,7 +10,7 @@ import WorkRail from '@/components/WorkRail.vue'
 import { useAppearance } from '@/composables/useAppearance'
 import { useGallery } from '@/composables/useGallery'
 import { useLibrary } from '@/composables/useLibrary'
-import { usePrefersReducedMotion } from '@/composables/useMediaQuery'
+import { useIsWide, usePrefersReducedMotion } from '@/composables/useMediaQuery'
 import { usePointerParallax } from '@/composables/usePointerParallax'
 import { usePointerAfterimage } from '@/composables/usePointerAfterimage'
 import { useSettings } from '@/composables/useSettings'
@@ -18,6 +19,7 @@ const {
   categories,
   exhibitions,
   viewMode,
+  layout,
   activeCategory,
   activeExhibitionId,
   activeExhibition,
@@ -26,6 +28,7 @@ const {
   railKey,
   setCategory,
   setMode,
+  setLayout,
   setExhibition,
   openWork,
   closeWork,
@@ -41,7 +44,22 @@ usePointerParallax()
 usePointerAfterimage()
 
 const reducedMotion = usePrefersReducedMotion()
+const isWide = useIsWide()
 const editorOpen = ref(false)
+
+/**
+ * 走廊模式是否可用（MR-017）。兩個排除條件都是知識檔的實現限制，不是偏好：
+ *
+ * - **窄螢幕**（限制 2）：第一人稱在手機視野裡一次只看得到一件，等於退化成
+ *   slideshow。本次採「退回網格」，它同時解掉「不跑版」那條硬要求。
+ *   ※ 這是 MR-017 記下的**待確認假設**（待討論 #5），不是用戶拍板
+ * - **減少動態**（限制 5）：走廊的價值全在位移補間，開了減少動態就該直接不提供，
+ *   而不是給一個瞬移版本
+ */
+const canHall = computed(() => isWide.value && !reducedMotion.value)
+
+/** 條件消失時（縮窗、系統改設定）自動退回牆面，不留在一個已經不該存在的模式裡 */
+const showHall = computed(() => layout.value === 'hall' && canHall.value)
 
 const params = new URLSearchParams(window.location.search)
 
@@ -80,8 +98,11 @@ onBeforeUnmount(() => {
       :view-mode="viewMode"
       :exhibitions="exhibitions"
       :active-exhibition-id="activeExhibitionId"
+      :layout="layout"
+      :can-hall="canHall"
       @select="setCategory"
       @select-mode="setMode"
+      @select-layout="setLayout"
       @select-exhibition="setExhibition"
     />
 
@@ -92,7 +113,14 @@ onBeforeUnmount(() => {
       >
         {{ activeExhibition.preface }}
       </p>
+      <GalleryHall
+        v-if="showHall"
+        :works="filteredWorks"
+        :view-key="railKey"
+        @open="openWork"
+      />
       <WorkRail
+        v-else
         :works="filteredWorks"
         :view-key="railKey"
         @open="openWork"
@@ -101,7 +129,11 @@ onBeforeUnmount(() => {
 
     <footer class="app__footer">
       <p class="app__hint">
-        拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節
+        {{
+          showHall
+            ? '方向鍵或下方按鈕往前走 · 點擊作品看細節'
+            : '拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節'
+        }}
       </p>
       <div class="app__footer-right">
         <button

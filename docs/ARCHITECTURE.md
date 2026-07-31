@@ -16,7 +16,7 @@ flowchart TD
 
   subgraph state["狀態層（Composables）"]
     UL["useLibrary.ts<br/>內建 + 自訂作品合併、CRUD、匯出匯入"]
-    UG["useGallery.ts<br/>依媒材/依展覽模式、篩選、詳情選取、網址同步"]
+    UG["useGallery.ts<br/>依媒材/依展覽模式、版面（牆面/走廊）、篩選、詳情選取、網址同步"]
     US["useSettings.ts<br/>站台設定、分頁標題"]
     UA["useAppearance.ts<br/>把分類主題寫進 :root"]
     UM["useMediaQuery.ts<br/>長廊／網格切換、減少動態"]
@@ -28,6 +28,7 @@ flowchart TD
     SH["SiteHeader.vue<br/>分類 / 展覽切換"]
     GA["GalleryAtmosphere.vue<br/>暗場光氛（體積光／浮塵／掃描光／霧氣／疊印色場／游標殘像）"]
     WR["WorkRail.vue<br/>長廊（景深＋拖曳＋逐件）／網格"]
+    GH["GalleryHall.vue<br/>走廊（第一人稱、離散步進、光波地板）"]
     WC["WorkCard.vue"]
     WD["WorkDetail.vue"]
     IS["IntroSequence.vue"]
@@ -61,7 +62,9 @@ flowchart TD
 | `data/works.ts` | 內建作品資料與作者預設值 | 使用者的編輯結果 |
 | `data/categories.ts` | 內建六類 + 紋理預設 `TEXTURE_PRESETS`；`categoryOf`（分類讀取唯一收口，孤兒回中性 fallback）、`resolveCategory`（自訂分類算完整 theme） | 中性層 token（寫死在 `styles/main.css`） |
 | `composables/useLibrary.ts` | 作品／分類／展覽的合併與 CRUD、單一 document 持久化與 v1→v2 遷移、匯出匯入 | 篩選與選取 |
-| `composables/useGallery.ts` | 依媒材/依展覽模式、篩選與詳情選取、網址同步 | 資料從哪來 |
+| `composables/useGallery.ts` | 依媒材/依展覽模式、**版面（牆面／走廊）**、篩選與詳情選取、網址同步 | 資料從哪來 |
+| `components/GalleryHall.vue` | 走廊模式的房間（四個面）、相機推進、光波地板、近景換大圖 | 幾何算式（在 `utils/hall.ts`）、誰能進走廊（由 `App.vue` 判定） |
+| `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定 | DOM 與樣式 |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
 | `composables/usePointerAfterimage.ts` | 游標殘像的兩組座標與淡出旗標寫進 `:root`（`--trail-*`） | 殘像長什麼樣（在光氛層的 CSS） |
@@ -81,7 +84,9 @@ flowchart TD
 1. `useLibrary.init()` 讀 localStorage 的 `artwall.library.v2` document；無 v2 但有舊 `works/overrides/hidden.v1` 三 key 時自動遷移組出並寫回（**不刪舊 key**，可回滾；v2 已存在則不重跑）
 2. 依 `imageKey` 從 IndexedDB 取出 blob，`createObjectURL` 接回 `thumb` / `src`
 3. `allWorks` = 自訂作品（在前）+ 內建作品（套用覆寫、排除隱藏）；`categories` = 內建六類 + 自訂分類
-4. `useGallery` 依模式篩選——依媒材＝`activeCategory`，依展覽＝該展覽 `workIds` 的有序清單 → `WorkRail` 渲染
+4. `useGallery` 依模式篩選——依媒材＝`activeCategory`，依展覽＝該展覽 `workIds` 的有序清單
+5. 版面決定由誰渲染：`layout === 'hall'` 且寬螢幕且未要求減少動態 → `GalleryHall`，否則 `WorkRail`。
+   **版面與篩選是兩個正交的軸**（`?v=hall` 與 `?c=` / `?m=ex` 可並存），切版面不會洗掉篩選
 
 ### 寫入（上傳）
 
@@ -144,8 +149,14 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 |------|---------|------|
 | 長廊（≥900px） | 軌道高度 | 卡片高 → 圖框高 → 由 `aspect-ratio` 反推圖框寬 → 卡片寬。說明文字絕對定位，不參與寬度計算 |
 | 網格（<900px） | 欄寬 | 圖框寬 100% → 由 `aspect-ratio` 推得高度 |
+| 走廊（≥900px，選配） | 同樣吃 `--rail-h` | 房間的四個面與作品全部在 3D 場景內，`transform` 不改 layout box，故不參與版面計算 |
 
-兩種模式都不讓圖片的固有尺寸參與版面計算，這是「圖片不會撐破版面」的根本原因。
+三種模式都不讓圖片的固有尺寸參與版面計算，這是「圖片不會撐破版面」的根本原因。
+
+**走廊的垂直尺度是一組必須對齊的常數**（`GalleryHall.vue` 的 `--ceil` / `--ground`）：
+天花板、兩道牆、地板共用同一條天際線與地平線，改一個就要改全部，否則牆會穿到
+地板以下、在外側露出黑色梯形。四個面另往觀者方向延伸 `--behind`，
+少了那一段，畫面四角會露出底下的光氛層。
 
 **詳情頁是例外，也只有這一處**：`.detail__viewport` 貼著圖片的實際尺寸收縮
 （圖受 `max-height: 60vh` / 手機 46vh 約束），放大後溢出的部分裁在這個框內。

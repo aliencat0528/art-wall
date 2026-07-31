@@ -56,8 +56,24 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 > `requestAnimationFrame` 被節流，不是壞掉。要驗這一類東西就走 Playwright。
 
 > **E2E 超時要先懷疑資源競爭**：光氛層有常駐動畫，若同時開著 dev server 與另一個
-> 開著本站的瀏覽器分頁，整套 23 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
+> 開著本站的瀏覽器分頁，整套測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
 > 先關掉再重跑，不要急著改測試。
+>
+> **本機 worker 已釘在 2**（MR-017）。原本是預設值（依 CPU 核心數，實測開 4 個），
+> 測試數從 23 加到 34 之後，上面那個現象變成**穩定重現**——`atmosphere.spec.js`
+> 的兩個 rAF 時序測試在整套跑時必紅、單獨跑必綠。受測程式碼沒有問題，
+> 是同時有數個分頁在跑常駐動畫把 rAF 節流掉了。2 個 worker 下總時長約 33 秒。
+
+**走廊模式（MR-017）測的就是用戶指定的三條硬要求**——不卡住、不跑版、作品點得開。
+`e2e/hall.spec.js` 11 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
+連按不掉步、**不撐出水平捲軸**、**走動後仍點得開作品**、切回牆面收乾淨且篩選還在、
+方向鍵不必先點畫面、減少動態與窄螢幕不提供入口。透視好不好看不測（視覺量值），
+純幾何在 `src/utils/hall.spec.ts`。
+
+> **走廊的點擊測試要指名 `data-index`，不能用 `.first()`**：可見窗口會保留相機後方
+> 一件，它在畫面上等於不存在，但 `boundingBox()` 仍算得出來，點下去只會打到底下的容器。
+> 開發時就是這樣抓到「viewport 攔截 pointer events」——`.hall__viewport` 是滿版元素，
+> 整條 3D 脈絡都要 `pointer-events: none`，只有作品那層收回來。
 
 ## 測試流程報告（四段式）
 
@@ -66,7 +82,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 83 tests 全過；build 產出 `dist/`；E2E 23 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 34 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 
