@@ -9,7 +9,6 @@ import {
   isNear,
   isPassed,
   isVisible,
-  roomSpan,
   slotFor,
 } from '@/utils/hall'
 
@@ -49,8 +48,6 @@ let walkTimer = 0
 
 const total = computed(() => props.works.length)
 const camera = computed(() => cameraZ(step.value))
-/** 房間長度隨件數算，走多遠都不會走出盡頭 */
-const room = computed(() => roomSpan(total.value))
 
 /** 現在站在誰面前。清單縮短的那一帧可能還沒夾回來，故取值要能接受 undefined */
 const current = computed<Work | undefined>(() => props.works[step.value])
@@ -142,7 +139,7 @@ onBeforeUnmount(() => {
     :class="{ 'is-walking': walking }"
     tabindex="0"
     aria-label="走進展場"
-    :style="{ '--cam': `${camera}px`, '--room': `${room}px` }"
+    :style="{ '--cam': `${camera}px` }"
     @keydown="onKeydown"
   >
     <p
@@ -286,7 +283,7 @@ onBeforeUnmount(() => {
 }
 
 /**
- * ── 房間的六個面 ───────────────────────────────────────
+ * ── 房間的四個面 ───────────────────────────────────────
  *
  * 垂直尺度是一組必須對齊的常數，改一個就要改全部，否則會出現縫：
  *   天花板 = `--ceil`（4%）／牆 = 從 `--ceil` 到 `--ground`／地板 = `--ground`（68%）
@@ -294,16 +291,28 @@ onBeforeUnmount(() => {
  * 第一版把牆設成 `top: -60%; height: 220%`，結果牆底穿到地板以下，
  * 在地板外側露出一塊黑色梯形——牆與地板沒有共用同一條地平線就會這樣。
  *
- * 四個面都往**觀者方向多延伸 `--behind`**。少了這一段，房間的近端剛好落在
- * 相機所在平面，畫面四角會露出底下的光氛層——看起來像「站在盒子外面往裡看」
- * 而不是「站在走廊裡」。600px 仍會漏，實測要 1100px 才把四角補滿。
+ * **房間跟著相機走**（每個面都前置 `translateZ(calc(var(--cam) * -1))` 抵銷場景位移）。
+ * 這條不是效能優化，是**正確性**：
+ *
+ * 第一版讓房間跟著場景一起後退，長度依件數算到 9250px。走到第 14 件時相機推進 5980，
+ * 四個面同時**橫跨相機平面**（z = perspective = 620），而 CSS 3D **沒有近平面裁切**——
+ * 元素只要跨越相機平面，整塊的投影就壞掉。實測畫面是地板、天花板、兩道牆全部消失，
+ * 只剩一件作品飄在暗處（光波在地板上，地板沒了自然也沒了）。
+ *
+ * 房間跟著相機之後：長度固定、近端永遠在相機前方，不可能跨越。
+ * 走廊沿長度是均勻重複的紋理，所以看不出它沒有後退；
+ * **移動感本來就由作品位移與地板光波提供**，不是由牆面提供。
+ *
+ * `--near` 要略小於 `perspective`（620）：560 時放大約 10 倍，足以填滿畫面四角，
+ * 又不會碰到相機平面。
  */
 .hall__viewport {
   --ceil: 4%;
   --ground: 68%;
-  --behind: 1100px;
-  /* 房間長度由元件依件數算好寫在 `--room`，不是常數——寫死會走出盡頭 */
-  --depth-span: var(--room, 4200px);
+  /* 房間近端離相機多遠。必須 < perspective(620)，否則跨越相機平面整塊爆掉 */
+  --near: 560px;
+  /* 房間長度。跟著相機走之後就是固定值，不必再依件數算 */
+  --depth-span: 5200px;
 }
 
 /* 暗場裡中性牆會整片沉掉，所以牆自帶一道由近而遠衰減的光。
@@ -324,16 +333,18 @@ onBeforeUnmount(() => {
 }
 
 /* 轉 90 度後局部 +X＝往場景深處，故往觀者延伸是 translateX 負值 */
+/* translateZ 必須排在 rotate **之前**——那一步要在未旋轉的座標系裡抵銷相機 */
 .hall__wall--l {
   left: calc(50% - var(--half));
   transform-origin: left center;
-  transform: rotateY(90deg) translateX(calc(var(--behind) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) translateX(calc(var(--near) * -1));
 }
 
 .hall__wall--r {
   left: calc(50% + var(--half));
   transform-origin: left center;
-  transform: rotateY(90deg) scaleX(-1) translateX(calc(var(--behind) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) scaleX(-1)
+    translateX(calc(var(--near) * -1));
 }
 
 /* 天花板：參考圖有，第一版漏了，於是畫面上緣直接穿幫露出背景光氛 */
@@ -346,7 +357,8 @@ onBeforeUnmount(() => {
   margin-left: calc(var(--half) * -1);
   pointer-events: none;
   transform-origin: top center;
-  transform: rotateX(-90deg) translateY(calc(var(--behind) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateX(-90deg)
+    translateY(calc(var(--near) * -1));
   background: linear-gradient(to top, #0f0f18, #08080e 60%);
 }
 
@@ -360,7 +372,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   pointer-events: none;
   transform-origin: top center;
-  transform: rotateX(90deg) translateY(calc(var(--behind) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateX(90deg)
+    translateY(calc(var(--near) * -1));
   background:
     repeating-linear-gradient(
       to right,
