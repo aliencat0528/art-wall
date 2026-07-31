@@ -73,17 +73,28 @@ function walk(delta: number): void {
   step.value = next
   walking.value = true
   window.clearTimeout(walkTimer)
-  // 720ms 是相機的補間長度，多留一點才不會在還在走的時候就把流速收回去
   window.clearTimeout(arriveTimer)
   arriving.value = false
+
+  /**
+   * 兩個時窗，長度刻意不同：
+   *
+   * - `walking` **1700ms**——地板加速與兩道行進光帶（`.hall__pulse`、
+   *   `.hall__wall::after`）都靠它。先前設 820ms，比動畫本身（1.05～1.15s）還短，
+   *   於是光帶跑到一半就被移除、憑空消失。**那正是「感受不到連接動畫」的主因**：
+   *   不是不夠亮，是根本沒播完。
+   * - `arriving` 在 **760ms** 觸發，也就是相機補間（720ms）剛停的那一刻。
+   *   它要對齊「到了」這件事，不能跟著 `walking` 一起拖到 1700ms。
+   */
   walkTimer = window.setTimeout(() => {
     walking.value = false
-    // 相機停下的那一刻才亮——早於此會和位移混在一起，讀不出是「到了」
+  }, 1700)
+  arriveTimer = window.setTimeout(() => {
     arriving.value = true
     arriveTimer = window.setTimeout(() => {
       arriving.value = false
-    }, 760)
-  }, 820)
+    }, 1100)
+  }, 760)
 }
 
 /**
@@ -454,7 +465,7 @@ onBeforeUnmount(() => {
 .hall__viewport {
   /* 天地拉到最開，走廊淨高 76% × --rail-h ≈ 424px，作品才放得下 */
   --ceil: 0%;
-  --ground: 88%;
+  --ground: 94%;
   /* 房間近端離相機多遠。必須 < perspective(620)，否則跨越相機平面整塊爆掉 */
   --near: 560px;
   /* 房間長度。跟著相機走之後就是固定值，不必再依件數算 */
@@ -538,7 +549,7 @@ onBeforeUnmount(() => {
 }
 
 .hall.is-walking .hall__wall::after {
-  animation: wall-run 1.05s cubic-bezier(0.33, 1, 0.68, 1);
+  animation: wall-run 1.55s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 @keyframes wall-run {
@@ -720,7 +731,7 @@ onBeforeUnmount(() => {
   background-size: 100% 720px;
   background-repeat: no-repeat;
   background-position: 0 50%;
-  animation: hall-pulse 1.15s var(--ease) both;
+  animation: hall-pulse 1.6s var(--ease) both;
 }
 
 @keyframes hall-pulse {
@@ -869,7 +880,7 @@ onBeforeUnmount(() => {
  * class 加上去就會從頭播動畫，這裡剛好夠用。
  */
 .piece.is-arriving .piece__mat {
-  animation: piece-arrive 760ms var(--ease);
+  animation: piece-arrive 1.1s var(--ease);
 }
 
 @keyframes piece-arrive {
@@ -903,7 +914,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
-  padding: 0.9rem var(--page-x);
+  /* 貼著下緣：走廊已經延伸到頁尾線，HUD 再往上就會壓在地板中央 */
+  padding: 0.35rem var(--page-x) 0.25rem;
   /**
    * **沒有底色**。原本是 `linear-gradient(to top, rgb(8 8 13 / 0.9), transparent)`，
    * 想讓按鈕在亮地板上讀得清楚——但它不在 `.hall__viewport` 的 mask 裡，
