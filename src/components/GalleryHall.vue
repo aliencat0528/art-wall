@@ -239,8 +239,17 @@ onBeforeUnmount(() => {
  */
 .hall {
   /* 牆面離中軸的距離＝走廊半寬。手機收窄（見檔末的降級段） */
-  --half: 300px;
-  --piece-w: 300px;
+  /**
+   * 這三個值有一條**必須成立的不等式**：
+   *   --lateral + (--piece-max-w + 裱框 36px) / 2  <  --half
+   * 看板是平行螢幕的平面、牆是縱深平面，兩者一定會相交——作品只要橫向超出牆的位置，
+   * 靠近相機的那半就跑到牆外，被牆斜切掉一角（實測畫面：左右兩件各缺一個角）。
+   * 改任何一個都要重算這條，不然就會再看到切角。
+   */
+  --half: 520px;
+  --lateral: 260px;
+  --piece-max-w: 400px;
+  --piece-max-h: 300px;
 
   position: relative;
   height: var(--rail-h);
@@ -422,12 +431,25 @@ onBeforeUnmount(() => {
   --flow-dur: 1.6s;
 }
 
-/* ── 作品 ───────────────────────────────────────────── */
+/**
+ * ── 作品：正對螢幕的看板（MR-018）────────────────────────
+ *
+ * **不再 `rotateY(±90deg)` 貼在牆面上。** 貼牆的版本走廊感是有的，但作品永遠是
+ * 側面——站在它旁邊時被透視壓成一條窄邊，等於為了空間感犧牲掉「看得到作品」，
+ * 而作品才是這個站台的主角（D-003／MR-008）。
+ *
+ * 改為**看板式**：每件仍在 3D 場景裡、仍有深度與透視縮放，但**面永遠平行於螢幕**，
+ * 所以任何角度都是完整的正面。深度給空間感、橫向偏移給左右兩列，
+ * 走廊本身（牆／地板／天花板）維持不變，空間感照舊由它們提供。
+ *
+ * 順帶解掉待討論 #6（鎖寬還是鎖高）：正對螢幕之後 width/height 都是真實螢幕尺寸，
+ * 直接給一個上限框、比例自己跑就好，不必二選一，也不裁切。
+ */
 .piece {
   position: absolute;
+  left: 50%;
   /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊 */
   top: 40%;
-  width: var(--piece-w);
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -436,17 +458,14 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+/* 未旋轉的元素，transform 的軸就是螢幕軸：X 往右、Z 往觀者。
+   `--depth` 是正值（越大越遠），所以推進畫面深處是負向 */
 .piece--left {
-  left: calc(50% - var(--half));
-  transform-origin: left center;
-  /* 轉 90 度後局部 +X 就是往場景深處，故深度只用 translateX 帶 */
-  transform: rotateY(90deg) translateX(var(--depth)) translateY(-50%);
+  transform: translate3d(calc(-50% - var(--lateral)), -50%, calc(var(--depth) * -1));
 }
 
 .piece--right {
-  left: calc(50% + var(--half));
-  transform-origin: left center;
-  transform: rotateY(-90deg) translateX(calc(var(--depth) * -1)) translateY(-50%);
+  transform: translate3d(calc(-50% + var(--lateral)), -50%, calc(var(--depth) * -1));
 }
 
 /* 裱框白邊：作品不直接貼牆。暗場版的「白」是壓到很暗的中性面板，
@@ -462,7 +481,10 @@ onBeforeUnmount(() => {
 
 .piece__image {
   display: block;
-  width: 100%;
+  /* 上限框：橫幅被寬度限制、直幅被高度限制，比例自己跑，兩種都不裁切 */
+  max-width: var(--piece-max-w);
+  max-height: var(--piece-max-h);
+  width: auto;
   height: auto;
 }
 
@@ -569,8 +591,11 @@ onBeforeUnmount(() => {
  */
 @media (max-width: 899px) {
   .hall {
-    --half: 178px;
-    --piece-w: 232px;
+    /* 同樣要滿足上面那條不等式：150 + (230+36)/2 = 283 < 300 */
+    --half: 300px;
+    --lateral: 150px;
+    --piece-max-w: 230px;
+    --piece-max-h: 190px;
   }
 
   .hall__viewport {
