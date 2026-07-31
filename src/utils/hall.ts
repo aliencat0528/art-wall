@@ -42,13 +42,14 @@ export function cameraZ(step: number, spacing: number = HALL_SPACING): number {
  * |------|------|--------|
  * | 150 | 0.81 | 比原尺寸小，很遠 |
  * | 40 | 0.94 | 接近 1:1 |
- * | **-90** | **1.17** | 跨到投影面前方，「站在它面前」 |
+ * | -90 | 1.17 | 跨到投影面前方 |
+ * | **-150** | **1.32** | 近到會溢出畫面兩側，「就在眼前」 |
  *
  * 負值代表作品在投影面與觀者之間。上限是 `perspective`（620）——
  * 到那裡就會穿過相機平面。已走過的那件在 `z = spacing - LEAD = 810`，
  * 確實越過了相機平面，但它 `opacity: 0`，看不到也點不到。
  */
-export const HALL_LEAD = -90
+export const HALL_LEAD = -150
 
 export interface HallSlot {
   /** 掛在哪面牆。偶數件在左、奇數件在右，兩側交錯才像走廊 */

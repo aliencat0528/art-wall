@@ -137,6 +137,24 @@ test('走動後仍然點得開作品', async ({ page }) => {
   expect(page.url()).toContain('w=')
 })
 
+/** 走深了要能一步回入口，不必按十幾次 BACK */
+test('START 一鍵回到第一件，且在入口時是停用的', async ({ page }) => {
+  await enterHall(page)
+
+  const start = page.getByRole('button', { name: /START/ })
+  await expect(start).toBeDisabled()
+
+  const walk = page.getByRole('button', { name: 'WALK ON →' })
+  for (let i = 0; i < 4; i += 1) await walk.click()
+  await expect(page.locator('.hall__pos')).toContainText('第 5 /')
+  await expect(start).toBeEnabled()
+
+  await start.click()
+
+  await expect(page.locator('.hall__pos')).toContainText('第 1 /')
+  await expect(start).toBeDisabled()
+})
+
 test('切回牆面時走廊收乾淨，篩選不被洗掉', async ({ page }) => {
   await page.goto('./?intro=0&c=watercolor')
   await page.getByRole('button', { name: '走進展場' }).click()

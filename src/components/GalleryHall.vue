@@ -212,6 +212,16 @@ onBeforeUnmount(() => {
     >
       <button
         type="button"
+        class="hall__step hall__step--start"
+        :disabled="step === 0"
+        title="回到入口"
+        @click="walk(-step)"
+      >
+        <span class="hall__step-label">⇤ START</span>
+        <span class="hall__step-icon">⇤</span>
+      </button>
+      <button
+        type="button"
         class="hall__step"
         :disabled="step === 0"
         @click="walk(-1)"
@@ -258,16 +268,25 @@ onBeforeUnmount(() => {
   --lateral: 380px;
   --piece-max-w: 520px;
   /**
-   * 高度上限受**走廊淨高**約束（`--ground` - `--ceil`，見下方房間段）：
-   *   作品總高 = --piece-max-h + 展籤 ~20，必須 < 淨高
+   * 高度上限受**走廊淨高**約束，而且**要把透視縮放算進去**（這是踩過的坑）：
+   *
+   *   --piece-max-h × 縮放 + 展籤 × 縮放  <  走廊淨高
+   *   縮放 = perspective / (perspective + HALL_LEAD) = 620 / 470 ≈ 1.32
+   *   280 × 1.32 + 20 × 1.32 = 396 < 424 ✓
+   *
+   * 只算 CSS 尺寸不算縮放，就會像先前那樣「圖碰到上面頂端」——
+   * 390 看起來安全（390 + 20 < 424），乘上 1.17 之後是 480，早就穿出去了。
+   *
+   * **這也是「再更近一點」的天花板**：LEAD 越負縮放越大，可用的 `--piece-max-h`
+   * 就越小。近距離感其實主要來自**橫向被推出畫面**（`--lateral` × 縮放），
+   * 不是靠把作品撐高——撐高只會撞到天花板。
    * 超過就會穿出地板，被地板平面斜切掉一條（實測：作品底部多一條灰帶）。
    * 現值 390 + 20 = 410 < 424（1440×900 下淨高約 424px）。
    *
-   * **這個值決定直幅作品的存在感**：橫幅（3:2）是被 `--piece-max-w` 封住的，
-   * 直幅（2:3）則一路被高度封住——330 時直幅只有 220px 寬，面積不到橫幅一半，
-   * 讀起來就是「比較遠」。拉到 390 之後直幅是 260×390，兩種版位才等重。
+   * **這個值決定直幅作品的存在感**：橫幅（3:2）被 `--piece-max-w` 封住，
+   * 直幅（2:3）則一路被高度封住。
    */
-  --piece-max-h: 390px;
+  --piece-max-h: 280px;
 
   position: relative;
   height: var(--rail-h);
@@ -302,6 +321,24 @@ onBeforeUnmount(() => {
   perspective: 620px;
   /* 視點略高於畫面中線＝站著看的高度，與參考圖同 */
   perspective-origin: 50% 44%;
+
+  /**
+   * 上下邊緣淡出，走廊才不會讀成**畫面中間一個明顯的長方形框**。
+   *
+   * `overflow: hidden` 給的是硬邊，加上站頭與頁尾各自的橫線，三條邊界疊在一起
+   * 就框出一個盒子。淡出之後走廊是「往上下延伸出去」而不是「裱在框裡」。
+   * 左右不淡出——那兩側本來就該被畫面切掉。
+   *
+   * **mask 掛在這一層而不是 `.hall`**：掛在 `.hall` 會把底下的 HUD
+   * （BACK／WALK ON／件數）一起淡掉，按鈕會糊成半透明。這一層只有 3D 場景。
+   */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 8%,
+    #000 86%,
+    transparent 100%
+  );
 }
 
 .hall__scene {
@@ -534,14 +571,15 @@ onBeforeUnmount(() => {
   background: linear-gradient(
     to bottom,
     transparent 0,
-    color-mix(in srgb, var(--accent) 34%, transparent) 46%,
-    color-mix(in srgb, var(--counter) 20%, transparent) 52%,
+    color-mix(in srgb, var(--accent) 72%, transparent) 44%,
+    color-mix(in srgb, var(--ink) 46%, transparent) 50%,
+    color-mix(in srgb, var(--counter) 44%, transparent) 56%,
     transparent 100%
   );
-  background-size: 100% 520px;
+  background-size: 100% 720px;
   background-repeat: no-repeat;
   background-position: 0 50%;
-  animation: hall-pulse 1s var(--ease) both;
+  animation: hall-pulse 1.15s var(--ease) both;
 }
 
 @keyframes hall-pulse {
@@ -725,6 +763,16 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+/* 回到入口：走深了之後要一步回到第一件，不必按十幾次 BACK。
+   走的是同一個 walk()，所以波前與地板加速一併照舊 */
+.hall__step--start {
+  letter-spacing: 0.16em;
+}
+
+.hall__step-icon {
+  display: none;
+}
+
 .hall__pos,
 .hall__empty {
   font-family: var(--font-mono);
@@ -786,8 +834,22 @@ onBeforeUnmount(() => {
   }
 
   .hall__step {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.62rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.58rem;
+  }
+
+  /* 三顆鈕在窄螢幕會擠掉位置字，START 收成純圖示 */
+  .hall__step--start {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .hall__step-label {
+    display: none;
+  }
+
+  .hall__step-icon {
+    display: inline;
   }
 }
 

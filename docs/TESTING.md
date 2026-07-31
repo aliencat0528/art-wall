@@ -71,7 +71,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 > 是同時有數個分頁在跑常駐動畫把 rAF 節流掉了。2 個 worker 下總時長約 33 秒。
 
 **走廊模式（MR-017）測的就是用戶指定的三條硬要求**——不卡住、不跑版、作品點得開。
-`e2e/hall.spec.js` 13 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
+`e2e/hall.spec.js` 14 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
 連按不掉步、**不撐出水平捲軸**、**走動後仍點得開作品**、切回牆面收乾淨且篩選還在、
 方向鍵不必先點畫面、減少動態不提供入口，以及**窄螢幕的降級版仍不跑版、仍點得開**。透視好不好看不測（視覺量值），
 純幾何在 `src/utils/hall.spec.ts`。
@@ -93,7 +93,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 36 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 37 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 
