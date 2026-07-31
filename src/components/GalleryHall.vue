@@ -44,7 +44,10 @@ const step = ref(0)
 const hall = ref<HTMLElement | null>(null)
 /** 走動中：只用來把地板流速拉快一下，不影響任何位置計算 */
 const walking = ref(false)
+/** 剛抵達：讓「站到面前」那一件亮一下，是「我確實換到下一件了」最直接的回饋 */
+const arriving = ref(false)
 let walkTimer = 0
+let arriveTimer = 0
 
 const total = computed(() => props.works.length)
 const camera = computed(() => cameraZ(step.value))
@@ -71,8 +74,15 @@ function walk(delta: number): void {
   walking.value = true
   window.clearTimeout(walkTimer)
   // 720ms 是相機的補間長度，多留一點才不會在還在走的時候就把流速收回去
+  window.clearTimeout(arriveTimer)
+  arriving.value = false
   walkTimer = window.setTimeout(() => {
     walking.value = false
+    // 相機停下的那一刻才亮——早於此會和位移混在一起，讀不出是「到了」
+    arriving.value = true
+    arriveTimer = window.setTimeout(() => {
+      arriving.value = false
+    }, 760)
   }, 820)
 }
 
@@ -129,6 +139,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(walkTimer)
+  window.clearTimeout(arriveTimer)
 })
 </script>
 
@@ -187,7 +198,10 @@ onBeforeUnmount(() => {
           :key="item.work.id"
           type="button"
           class="piece"
-          :class="[`piece--${item.slot.side}`, { 'is-passed': item.passed }]"
+          :class="[
+            `piece--${item.slot.side}`,
+            { 'is-passed': item.passed, 'is-arriving': arriving && item.index === step },
+          ]"
           :style="{ '--depth': `${item.slot.depth}px` }"
           :data-index="item.index"
           :aria-label="`開啟作品：${item.work.title}`"
@@ -272,7 +286,10 @@ onBeforeUnmount(() => {
    *
    *   --piece-max-h × 縮放 + 展籤 × 縮放  <  走廊淨高
    *   縮放 = perspective / (perspective + HALL_LEAD) = 620 / 470 ≈ 1.32
-   *   280 × 1.32 + 20 × 1.32 = 396 < 424 ✓
+   *   240 × 1.32 + 20 × 1.32 = 343 < 446 ✓
+   *
+   * 還有一條：**作品上緣必須落在 mask 的淡出區之外**（`.hall__viewport` 上下各
+   * 淡出 8%），否則作品頂端會被淡掉，看起來就是「頂到上面」。
    *
    * 只算 CSS 尺寸不算縮放，就會像先前那樣「圖碰到上面頂端」——
    * 390 看起來安全（390 + 20 < 424），乘上 1.17 之後是 480，早就穿出去了。
@@ -286,7 +303,7 @@ onBeforeUnmount(() => {
    * **這個值決定直幅作品的存在感**：橫幅（3:2）被 `--piece-max-w` 封住，
    * 直幅（2:3）則一路被高度封住。
    */
-  --piece-max-h: 280px;
+  --piece-max-h: 240px;
 
   position: relative;
   height: var(--rail-h);
@@ -378,7 +395,7 @@ onBeforeUnmount(() => {
 .hall__viewport {
   /* 天地拉到最開，走廊淨高 76% × --rail-h ≈ 424px，作品才放得下 */
   --ceil: 0%;
-  --ground: 76%;
+  --ground: 80%;
   /* 房間近端離相機多遠。必須 < perspective(620)，否則跨越相機平面整塊爆掉 */
   --near: 560px;
   /* 房間長度。跟著相機走之後就是固定值，不必再依件數算 */
@@ -636,9 +653,14 @@ onBeforeUnmount(() => {
 .piece {
   position: absolute;
   left: 50%;
-  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊。
-     38% 是配合 --piece-max-h 390 調的：40% 時直幅下緣會壓到地平線 */
-  top: 38%;
+  /**
+   * 掛畫線。**上下各有一條約束，44% 是同時滿足兩者的位置**（實測掃出來的）：
+   *   上緣 > 11%（`.hall__viewport` 的 mask 上下各淡出 8%，落進去就會被淡掉，
+   *              看起來就是「頂到上面」）
+   *   下緣 < 78%（地平線在 `--ground` 80%，壓過去會被地板切掉）
+   * 1440×900 實測：44% + `--piece-max-h: 240` → 上緣 12.3%、下緣 75.7%
+   */
+  top: 44%;
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -711,6 +733,28 @@ onBeforeUnmount(() => {
   letter-spacing: 0.16em;
   color: var(--ink-faint);
   text-align: center;
+}
+
+/**
+ * 抵達脈衝：相機停下的那一刻，站到面前的那一件亮一下再收回去。
+ *
+ * 地板的波前是「這一步走了多遠」，這一下是「到的是這一件」——兩個回饋指的不是同一件事。
+ * 相機補間只有 720ms，作品長得像的時候光看位移很難確定換了沒有。
+ *
+ * 用 class 切換而不是 `:key` 重建：作品是圖片，重建會重新解碼一次。
+ * class 加上去就會從頭播動畫，這裡剛好夠用。
+ */
+.piece.is-arriving .piece__mat {
+  animation: piece-arrive 760ms var(--ease);
+}
+
+@keyframes piece-arrive {
+  30% {
+    border-color: color-mix(in srgb, var(--accent) 85%, transparent);
+    box-shadow:
+      0 0 132px 2px color-mix(in srgb, var(--accent) 88%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
 }
 
 .piece:hover .piece__mat,
@@ -803,7 +847,7 @@ onBeforeUnmount(() => {
     --half: 380px;
     --lateral: 190px;
     --piece-max-w: 260px;
-    --piece-max-h: 260px;
+    --piece-max-h: 200px;
   }
 
   .hall__viewport {
