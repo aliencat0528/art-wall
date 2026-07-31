@@ -30,6 +30,11 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
   不認得 jsdom 的 Blob（存進去讀回來變空物件）。所以 `idb.spec.ts` 只用 `Uint8Array`
   驗 wrapper 的 key/覆寫/刪除邏輯，真正的 Blob 往返交給 E2E 的「reload 後圖片還在」。
 
+**上傳流程要等處理完再往下走**：`processImage`（canvas 縮圖 + `toBlob`）是非同步的，
+本機實測從按下「新增作品」到寫進 localStorage／IndexedDB 要 1.5～2 秒，期間面板顯示「處理中⋯」。
+測試若在這段期間 `reload()`，那筆作品會整個消失——**看起來像持久化壞掉，其實是測試搶跑**。
+規則：驗持久化前，先等使用者看得到的結果出現（作品上牆），不要等固定秒數。
+
 **單元測試目前不涵蓋**（有意）：`useAppearance` / `useMediaQuery` / `useSettings` /
 `usePointerParallax` 偏 DOM 與媒體查詢，行為由 E2E 的整頁流程間接覆蓋；
 `useLibrary.replaceImage`（換圖）尚無專測，是已知缺口。
