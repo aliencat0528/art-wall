@@ -10,7 +10,7 @@ import WorkRail from '@/components/WorkRail.vue'
 import { useAppearance } from '@/composables/useAppearance'
 import { useGallery } from '@/composables/useGallery'
 import { useLibrary } from '@/composables/useLibrary'
-import { useIsWide, usePrefersReducedMotion } from '@/composables/useMediaQuery'
+import { usePrefersReducedMotion } from '@/composables/useMediaQuery'
 import { usePointerParallax } from '@/composables/usePointerParallax'
 import { usePointerAfterimage } from '@/composables/usePointerAfterimage'
 import { useSettings } from '@/composables/useSettings'
@@ -44,19 +44,19 @@ usePointerParallax()
 usePointerAfterimage()
 
 const reducedMotion = usePrefersReducedMotion()
-const isWide = useIsWide()
 const editorOpen = ref(false)
 
 /**
- * 走廊模式是否可用（MR-017）。兩個排除條件都是知識檔的實現限制，不是偏好：
+ * 走廊模式是否可用（MR-017）。
  *
- * - **窄螢幕**（限制 2）：第一人稱在手機視野裡一次只看得到一件，等於退化成
- *   slideshow。本次採「退回網格」，它同時解掉「不跑版」那條硬要求。
- *   ※ 這是 MR-017 記下的**待確認假設**（待討論 #5），不是用戶拍板
- * - **減少動態**（限制 5）：走廊的價值全在位移補間，開了減少動態就該直接不提供，
- *   而不是給一個瞬移版本
+ * **手機採「接受降級」而非「退回網格」**（待討論 #5，用戶拍板）：同一套程式碼跑到底，
+ * 窄螢幕只把走廊收窄、作品放大，一次看一件。代價是體驗明顯較差（見知識檔限制 2），
+ * 換到的是不必維護第二套窄螢幕版面與第二組 E2E。
+ *
+ * 唯一的排除條件是**減少動態**（限制 5）：走廊的價值全在位移補間，
+ * 開了減少動態就該直接不提供，而不是給一個瞬移版本。
  */
-const canHall = computed(() => isWide.value && !reducedMotion.value)
+const canHall = computed(() => !reducedMotion.value)
 
 /** 條件消失時（縮窗、系統改設定）自動退回牆面，不留在一個已經不該存在的模式裡 */
 const showHall = computed(() => layout.value === 'hall' && canHall.value)

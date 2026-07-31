@@ -136,19 +136,42 @@ test('減少動態時不提供走廊入口', async ({ page }) => {
   await expect(page.getByRole('button', { name: '走進展場' })).toHaveCount(0)
 })
 
-/** 窄螢幕退回網格（限制 2；此為 MR-017 的待確認假設，見待討論 #5） */
-test('窄螢幕不提供走廊入口', async ({ page }) => {
-  await page.setViewportSize({ width: 420, height: 900 })
+/**
+ * 窄螢幕採「接受降級」而非退回網格（待討論 #5，用戶拍板）。
+ * 走廊照樣提供，只是收窄成一次看一件——體驗較差是已知代價，不是壞掉。
+ */
+test('窄螢幕照樣進得了走廊', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('./?intro=0')
 
-  await expect(page.getByRole('button', { name: '走進展場' })).toHaveCount(0)
+  await page.getByRole('button', { name: '走進展場' }).click()
+
+  await expect(page.locator('.hall')).toBeVisible()
+  await expect(page.locator('.hall__scene')).toBeVisible()
 })
 
-/** 帶著 ?v=hall 進窄螢幕不該卡在一個不存在的模式裡 */
-test('窄螢幕帶 ?v=hall 進站會退回牆面', async ({ page }) => {
-  await page.setViewportSize({ width: 420, height: 900 })
+test('窄螢幕深連結 ?v=hall 直接進走廊，不退回牆面', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('./?intro=0&v=hall')
 
-  await expect(page.locator('.hall')).toHaveCount(0)
-  await expect(page.locator('.wall')).toBeVisible()
+  await expect(page.locator('.hall')).toBeVisible()
+  await expect(page.locator('.wall')).toHaveCount(0)
+})
+
+/** 降級版仍要守住三條硬要求中的兩條——手機更容易跑版與點不開 */
+test('窄螢幕走動後不跑版、仍點得開作品', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('./?intro=0&v=hall')
+  await expect(page.locator('.hall')).toBeVisible()
+
+  await page.getByRole('button', { name: 'WALK ON →' }).click()
+  await expect(page.locator('.hall__pos')).toContainText('第 2 /')
+
+  const overflowed = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  )
+  expect(overflowed).toBe(false)
+
+  await page.locator('.piece[data-index="1"]').click()
+  await expect(page.locator('.detail')).toBeVisible()
 })

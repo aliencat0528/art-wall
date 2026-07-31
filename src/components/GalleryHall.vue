@@ -4,13 +4,12 @@ import type { Work } from '@/types'
 import { categoryOf } from '@/data/categories'
 import { useLibrary } from '@/composables/useLibrary'
 import {
-  HALL_HALF_WIDTH,
-  HALL_SPACING,
   cameraZ,
   clampStep,
   isNear,
   isPassed,
   isVisible,
+  roomSpan,
   slotFor,
 } from '@/utils/hall'
 
@@ -50,6 +49,8 @@ let walkTimer = 0
 
 const total = computed(() => props.works.length)
 const camera = computed(() => cameraZ(step.value))
+/** 房間長度隨件數算，走多遠都不會走出盡頭 */
+const room = computed(() => roomSpan(total.value))
 
 /** 現在站在誰面前。清單縮短的那一帧可能還沒夾回來，故取值要能接受 undefined */
 const current = computed<Work | undefined>(() => props.works[step.value])
@@ -141,11 +142,7 @@ onBeforeUnmount(() => {
     :class="{ 'is-walking': walking }"
     tabindex="0"
     aria-label="走進展場"
-    :style="{
-      '--cam': `${camera}px`,
-      '--half': `${HALL_HALF_WIDTH}px`,
-      '--span': `${HALL_SPACING}px`,
-    }"
+    :style="{ '--cam': `${camera}px`, '--room': `${room}px` }"
     @keydown="onKeydown"
   >
     <p
@@ -219,7 +216,7 @@ onBeforeUnmount(() => {
         ← BACK
       </button>
       <p class="hall__pos">
-        {{ currentLabel }} · 第 {{ step + 1 }} / {{ total }} 件
+        <span class="hall__pos-label">{{ currentLabel }} · </span>第 {{ step + 1 }} / {{ total }} 件
       </p>
       <button
         type="button"
@@ -244,6 +241,10 @@ onBeforeUnmount(() => {
  * 實體展場的走廊本來就是封閉的，看得到外面的環境光才奇怪。
  */
 .hall {
+  /* 牆面離中軸的距離＝走廊半寬。手機收窄（見檔末的降級段） */
+  --half: 300px;
+  --piece-w: 300px;
+
   position: relative;
   height: var(--rail-h);
   overflow: hidden;
@@ -300,7 +301,8 @@ onBeforeUnmount(() => {
   --ceil: 4%;
   --ground: 68%;
   --behind: 1100px;
-  --depth-span: 4200px;
+  /* 房間長度由元件依件數算好寫在 `--room`，不是常數——寫死會走出盡頭 */
+  --depth-span: var(--room, 4200px);
 }
 
 /* 暗場裡中性牆會整片沉掉，所以牆自帶一道由近而遠衰減的光。
@@ -412,7 +414,7 @@ onBeforeUnmount(() => {
   position: absolute;
   /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊 */
   top: 40%;
-  width: 300px;
+  width: var(--piece-w);
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -451,10 +453,19 @@ onBeforeUnmount(() => {
   height: auto;
 }
 
-/* 已走過的作品在相機側後方，透視會把它撐到極大。淡掉並收回指標——
-   在你身後的東西不該搶視覺重量，也不該還能點（否則會誤觸到看不見的作品） */
+/**
+ * 已走過的作品在相機側後方，透視會把它撐到極大——實測是一塊佔掉四分之一畫面的板子。
+ *
+ * 淡到**全透明**而不是留個 0.25：撐爆的尺寸讓任何殘留透明度都還是很顯眼。
+ * 但**留在 DOM 裡**（可見窗口後方保 1 件），往回走時 `is-passed` 一解除就淡回來，
+ * 不會憑空跳出。順便收回指標——身後的東西不該還能點到。
+ */
+.piece {
+  transition: opacity 620ms var(--ease);
+}
+
 .piece.is-passed {
-  opacity: 0.25;
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -531,6 +542,56 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   height: 100%;
+}
+
+/**
+ * ── 窄螢幕：接受降級（待討論 #5，用戶拍板）─────────────
+ *
+ * 不另做一套版面，同一份程式碼把走廊收窄、作品放大——一次看一件。
+ * 這正是知識檔限制 2 說的「退化成 slideshow」，是**已知且被接受的代價**，
+ * 換到的是不必維護第二套窄螢幕版面與第二組 E2E。
+ *
+ * 只調三個量：走廊半寬、作品寬、HUD 排列。幾何與相機完全不動——
+ * 一動就變成兩套要各自驗的東西了。
+ */
+@media (max-width: 899px) {
+  .hall {
+    --half: 178px;
+    --piece-w: 232px;
+  }
+
+  .hall__viewport {
+    /* 手機視野窄，天地要收一點，作品才有位置 */
+    --ceil: 2%;
+    --ground: 72%;
+
+    perspective: 460px;
+  }
+
+  .piece__mat {
+    padding: 10px;
+  }
+
+  .hall__hud {
+    gap: 0.75rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .hall__pos {
+    flex: 1;
+    text-align: center;
+    font-size: 0.6rem;
+  }
+
+  /* 分類名太長會把兩顆鈕擠掉，窄螢幕只留「第 n / 共 m」 */
+  .hall__pos-label {
+    display: none;
+  }
+
+  .hall__step {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.62rem;
+  }
 }
 
 /* 減少動態時本模式根本不會被提供（見 App.vue），這裡是最後一道保險 */

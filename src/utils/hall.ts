@@ -9,11 +9,24 @@
 /** 作品沿 Z 軸的間距。與 `PERSPECTIVE` 一起決定「一步走多遠」的體感 */
 export const HALL_SPACING = 460
 
-/** 場景的 perspective。值越小透視越誇張；460/620 這組對到參考圖的視角 */
-export const HALL_PERSPECTIVE = 620
 
-/** 牆面離中軸的距離（px）。決定走廊寬度，也決定作品貼在哪 */
-export const HALL_HALF_WIDTH = 300
+/**
+ * 房間往觀者方向多延伸的長度。少了這一段，房間近端剛好落在相機所在平面，
+ * 畫面四角會露出底下的光氛層。
+ */
+export const HALL_BEHIND = 1100
+
+/**
+ * 房間要多長。
+ *
+ * **不能寫死**：房間長度必須蓋過整段步行距離，否則走到後段會**走出房間盡頭**——
+ * 實測 14 件走三步後，畫面右緣就露出牆的近端接縫（那截牆已經跑到相機後方）。
+ * 尾端再多留一段，讓最後一件之後仍看得到走廊延伸下去，而不是撞到一面牆。
+ */
+export function roomSpan(total: number, spacing: number = HALL_SPACING): number {
+  const walk = Math.max(0, total - 1) * spacing
+  return HALL_BEHIND + HALL_LEAD + walk + spacing * 4
+}
 
 /** 夾住步數。空清單時回 0，不讓 `-1` 或超界流進 transform */
 export function clampStep(step: number, total: number): number {

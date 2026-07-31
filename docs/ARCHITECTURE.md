@@ -47,6 +47,7 @@ flowchart TD
   APP --> GA
   APP --> SH
   APP --> WR
+  APP --> GH
   APP --> WD
   APP --> IS
   APP --> EP
@@ -64,7 +65,7 @@ flowchart TD
 | `composables/useLibrary.ts` | 作品／分類／展覽的合併與 CRUD、單一 document 持久化與 v1→v2 遷移、匯出匯入 | 篩選與選取 |
 | `composables/useGallery.ts` | 依媒材/依展覽模式、**版面（牆面／走廊）**、篩選與詳情選取、網址同步 | 資料從哪來 |
 | `components/GalleryHall.vue` | 走廊模式的房間（四個面）、相機推進、光波地板、近景換大圖 | 幾何算式（在 `utils/hall.ts`）、誰能進走廊（由 `App.vue` 判定） |
-| `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定 | DOM 與樣式 |
+| `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定、**房間長度 `roomSpan(total)`** | DOM 與樣式 |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
 | `composables/usePointerAfterimage.ts` | 游標殘像的兩組座標與淡出旗標寫進 `:root`（`--trail-*`） | 殘像長什麼樣（在光氛層的 CSS） |
@@ -85,7 +86,7 @@ flowchart TD
 2. 依 `imageKey` 從 IndexedDB 取出 blob，`createObjectURL` 接回 `thumb` / `src`
 3. `allWorks` = 自訂作品（在前）+ 內建作品（套用覆寫、排除隱藏）；`categories` = 內建六類 + 自訂分類
 4. `useGallery` 依模式篩選——依媒材＝`activeCategory`，依展覽＝該展覽 `workIds` 的有序清單
-5. 版面決定由誰渲染：`layout === 'hall'` 且寬螢幕且未要求減少動態 → `GalleryHall`，否則 `WorkRail`。
+5. 版面決定由誰渲染：`layout === 'hall'` 且未要求減少動態 → `GalleryHall`，否則 `WorkRail`。
    **版面與篩選是兩個正交的軸**（`?v=hall` 與 `?c=` / `?m=ex` 可並存），切版面不會洗掉篩選
 
 ### 寫入（上傳）
@@ -149,7 +150,7 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 |------|---------|------|
 | 長廊（≥900px） | 軌道高度 | 卡片高 → 圖框高 → 由 `aspect-ratio` 反推圖框寬 → 卡片寬。說明文字絕對定位，不參與寬度計算 |
 | 網格（<900px） | 欄寬 | 圖框寬 100% → 由 `aspect-ratio` 推得高度 |
-| 走廊（≥900px，選配） | 同樣吃 `--rail-h` | 房間的四個面與作品全部在 3D 場景內，`transform` 不改 layout box，故不參與版面計算 |
+| 走廊（選配，全尺寸） | 同樣吃 `--rail-h` | 房間的四個面與作品全部在 3D 場景內，`transform` 不改 layout box，故不參與版面計算。窄螢幕只收窄走廊半寬與作品寬，**幾何與相機不變** |
 
 三種模式都不讓圖片的固有尺寸參與版面計算，這是「圖片不會撐破版面」的根本原因。
 
@@ -157,6 +158,9 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 天花板、兩道牆、地板共用同一條天際線與地平線，改一個就要改全部，否則牆會穿到
 地板以下、在外側露出黑色梯形。四個面另往觀者方向延伸 `--behind`，
 少了那一段，畫面四角會露出底下的光氛層。
+
+**房間長度不能寫死**：`roomSpan(total)` 依件數算出來寫進 `--room`。寫死的話走到後段
+會走出盡頭——實測 14 件走三步後，畫面右緣就露出牆的近端接縫。
 
 **詳情頁是例外，也只有這一處**：`.detail__viewport` 貼著圖片的實際尺寸收縮
 （圖受 `max-height: 60vh` / 手機 46vh 約束），放大後溢出的部分裁在這個框內。
