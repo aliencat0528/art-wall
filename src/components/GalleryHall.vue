@@ -407,8 +407,13 @@ onBeforeUnmount(() => {
   transform-origin: top center;
   transform: translateZ(calc(var(--cam) * -1)) rotateX(-90deg)
     translateY(calc(var(--near) * -1));
-  /* to top ＝往深處（rotateX(-90deg) 之後）。遠端幾乎全透，天花板才不會壓在畫面上 */
-  background: linear-gradient(to top, rgb(16 16 26 / 0.62), rgb(8 8 14 / 0.1) 62%);
+  /* 測試：白色半透明天地，看能不能更接近參考圖的淺色展場 */
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--ink) 92%, transparent) 0%,
+    color-mix(in srgb, var(--ink) 26%, transparent) 34%,
+    transparent 66%
+  );
 }
 
 .hall__floor {
@@ -426,10 +431,15 @@ onBeforeUnmount(() => {
   background:
     repeating-linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 11%, transparent) 0 1px,
+      color-mix(in srgb, var(--ink) 22%, transparent) 0 1px,
       transparent 1px 150px
     ),
-    linear-gradient(to bottom, rgb(6 6 11 / 0.82), rgb(6 6 11 / 0.22));
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ink) 90%, transparent) 0%,
+      color-mix(in srgb, var(--ink) 24%, transparent) 38%,
+      transparent 72%
+    );
 }
 
 /**
@@ -457,7 +467,7 @@ onBeforeUnmount(() => {
   background:
     repeating-linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--accent) 16%, transparent) 0 1px,
+      color-mix(in srgb, var(--ink) 30%, transparent) 0 1px,
       transparent 1px 160px
     ),
     repeating-linear-gradient(
