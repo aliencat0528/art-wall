@@ -30,7 +30,7 @@ import {
  *    而地板是全場最大的一塊平面）。減少動態時整個模式不提供。
  * 2. **不跑版**——裁切用的 `overflow: hidden` 放在 `.hall`，而 `perspective`
  *    在它的子層 `.hall__viewport`。裁切元素落在 3D 脈絡之外，才不觸發上述壓平。
- *    窄螢幕不提供走廊（`useIsWide`），版面規則維持 `ARCHITECTURE.md` 那張表。
+ *    窄螢幕採**接受降級**（只收窄走廊與作品，幾何不動），見檔末的降級段。
  * 3. **點得開**——所有裝飾層一律 `pointer-events: none`，只有 `.piece` 是按鈕；
  *    走動不用拖曳，因此**完全不碰 `setPointerCapture`**（MR-014 的教訓：
  *    指標捕獲會把後續 click 改派給容器，作品全部點不開）。
