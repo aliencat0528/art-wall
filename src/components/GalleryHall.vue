@@ -271,8 +271,8 @@ onBeforeUnmount(() => {
      中心較透＝消失點發亮，這是最便宜的一條縱深線索 */
   background: radial-gradient(
     118% 78% at 50% 42%,
-    rgb(9 9 17 / 0.28),
-    rgb(4 4 9 / 0.88) 72%
+    rgb(9 9 17 / 0.12),
+    rgb(4 4 9 / 0.62) 72%
   );
 }
 
@@ -400,8 +400,15 @@ onBeforeUnmount(() => {
   transform-origin: top center;
   transform: translateZ(calc(var(--cam) * -1)) rotateX(-90deg)
     translateY(calc(var(--near) * -1));
-  /* to top ＝往深處（rotateX(-90deg) 之後）。遠端幾乎全透，天花板才不會壓在畫面上 */
-  background: linear-gradient(to top, rgb(16 16 26 / 0.62), rgb(8 8 14 / 0.1) 62%);
+  /**
+   * to top ＝往深處（`rotateX(-90deg)` 之後）。
+   *
+   * **近端也只有 0.3 的 alpha**：先前 0.62 讓天花板在畫面上緣讀成一塊實心黑區，
+   * 與站頭之間出現一條硬邊。壓到 0.3 之後底下的光氛層透得出來，
+   * 天花板變成「暗處的一個面」而不是「貼上去的黑板」。
+   * 白色那版試過並退回（`5ecda0c` / `c4f967d`）——問題從來不是顏色，是不透明度。
+   */
+  background: linear-gradient(to top, rgb(14 14 24 / 0.3), rgb(8 8 14 / 0.04) 58%);
 }
 
 .hall__floor {
@@ -419,10 +426,11 @@ onBeforeUnmount(() => {
   background:
     repeating-linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 11%, transparent) 0 1px,
+      color-mix(in srgb, var(--accent) 13%, transparent) 0 1px,
       transparent 1px 150px
     ),
-    linear-gradient(to bottom, rgb(6 6 11 / 0.82), rgb(6 6 11 / 0.22));
+    /* 同天花板：近端從 0.82 壓到 0.34，地板才不是畫面下緣的一塊黑區 */
+    linear-gradient(to bottom, rgb(6 6 11 / 0.34), rgb(6 6 11 / 0.06));
 }
 
 /**
