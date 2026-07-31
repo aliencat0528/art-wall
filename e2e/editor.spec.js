@@ -56,6 +56,12 @@ test('reload 之後作品還在，圖片也接得回來', async ({ page }) => {
   const panel = await createWork(page)
   await panel.getByRole('button', { name: '關閉編輯面板' }).click()
 
+  // 先等作品真的上牆再 reload。圖片處理（canvas 縮圖 + toBlob）是非同步的，
+  // 本機實測要 1.5～2 秒才寫進 localStorage／IndexedDB；不等就 reload 會把
+  // 還在處理中的那一筆整個丟掉，測起來像「持久化壞了」，其實是這條測試自己搶跑。
+  // 這裡等的是使用者看得到的結果，不是內部狀態——要驗的是「存得住」而不是「多快存完」。
+  await expect(page.getByRole('button', { name: `開啟作品：${TITLE}` })).toBeVisible()
+
   await page.reload()
 
   const card = page.getByRole('button', { name: `開啟作品：${TITLE}` })
