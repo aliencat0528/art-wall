@@ -65,7 +65,7 @@ flowchart TD
 | `composables/useLibrary.ts` | 作品／分類／展覽的合併與 CRUD、單一 document 持久化與 v1→v2 遷移、匯出匯入 | 篩選與選取 |
 | `composables/useGallery.ts` | 依媒材/依展覽模式、**版面（牆面／走廊）**、篩選與詳情選取、網址同步 | 資料從哪來 |
 | `components/GalleryHall.vue` | 走廊模式的房間（四個面）、相機推進、光波地板、近景換大圖 | 幾何算式（在 `utils/hall.ts`）、誰能進走廊（由 `App.vue` 判定） |
-| `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定、**房間長度 `roomSpan(total)`** | DOM 與樣式 |
+| `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定 | DOM 與樣式、房間尺寸（純 CSS 常數） |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
 | `composables/usePointerAfterimage.ts` | 游標殘像的兩組座標與淡出旗標寫進 `:root`（`--trail-*`） | 殘像長什麼樣（在光氛層的 CSS） |
@@ -156,8 +156,7 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 
 **走廊的垂直尺度是一組必須對齊的常數**（`GalleryHall.vue` 的 `--ceil` / `--ground`）：
 天花板、兩道牆、地板共用同一條天際線與地平線，改一個就要改全部，否則牆會穿到
-地板以下、在外側露出黑色梯形。四個面另往觀者方向延伸 `--behind`，
-少了那一段，畫面四角會露出底下的光氛層。
+地板以下、在外側露出黑色梯形。
 
 **房間跟著相機走**：四個面各前置 `translateZ(calc(var(--cam) * -1))` 抵銷場景位移，
 長度固定 5200px，近端固定在相機前方 `--near`（560px，必須 < `perspective` 620）。
