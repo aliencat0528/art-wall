@@ -30,7 +30,7 @@ import {
  *    而地板是全場最大的一塊平面）。減少動態時整個模式不提供。
  * 2. **不跑版**——裁切用的 `overflow: hidden` 放在 `.hall`，而 `perspective`
  *    在它的子層 `.hall__viewport`。裁切元素落在 3D 脈絡之外，才不觸發上述壓平。
- *    窄螢幕不提供走廊（`useIsWide`），版面規則維持 `ARCHITECTURE.md` 那張表。
+ *    窄螢幕採**接受降級**（只收窄走廊與縮小掛畫，幾何不動），見檔末的降級段。
  * 3. **點得開**——所有裝飾層一律 `pointer-events: none`，只有 `.piece` 是按鈕；
  *    走動不用拖曳，因此**完全不碰 `setPointerCapture`**（MR-014 的教訓：
  *    指標捕獲會把後續 click 改派給容器，作品全部點不開）。
@@ -243,7 +243,8 @@ onBeforeUnmount(() => {
 .hall {
   /* 牆面離中軸的距離＝走廊半寬。手機收窄（見檔末的降級段） */
   --half: 300px;
-  --piece-w: 300px;
+  /* 掛畫高度。作品鎖高不鎖寬，理由見 `.piece` */
+  --piece-h: 268px;
 
   position: relative;
   height: var(--rail-h);
@@ -410,11 +411,21 @@ onBeforeUnmount(() => {
 }
 
 /* ── 作品 ───────────────────────────────────────────── */
+/**
+ * 作品**鎖高度、不鎖寬度**——共用一條掛畫線，寬度各自不同，這是實體展場的掛法。
+ *
+ * 注意這裡的 `width` 不是畫面上的寬：牆已經 `rotateY(90deg)`，所以元素的 width
+ * 其實是**沿走廊的長度**。鎖 width 的話，橫幅作品會被壓成又扁又短、直幅則拉得又高又窄，
+ * 整條走廊看起來全是直的。改成鎖 `.piece__image` 的高度、寬度 `auto`，
+ * 橫幅自然占掉較長一段牆面，讀起來才是橫的。**不裁切任何作品。**
+ */
 .piece {
   position: absolute;
-  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊 */
-  top: 40%;
-  width: var(--piece-w);
+  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊。
+     38% 是配合 --piece-h 調出來的：再低下去展籤會壓到地平線 */
+  top: 38%;
+  /* 絕對定位 + width auto ＝ 收縮到內容寬，讓比例決定占多長 */
+  width: auto;
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -449,8 +460,8 @@ onBeforeUnmount(() => {
 
 .piece__image {
   display: block;
-  width: 100%;
-  height: auto;
+  height: var(--piece-h);
+  width: auto;
 }
 
 /**
@@ -557,7 +568,7 @@ onBeforeUnmount(() => {
 @media (max-width: 899px) {
   .hall {
     --half: 178px;
-    --piece-w: 232px;
+    --piece-h: 186px;
   }
 
   .hall__viewport {
