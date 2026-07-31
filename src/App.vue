@@ -191,9 +191,8 @@ onBeforeUnmount(() => {
   border-bottom-color: transparent;
 }
 
-.app--hall .app__footer {
-  border-top-color: transparent;
-}
+/* 頁尾那條 accent 線**保留**：使用者要的是「中間不要有框」，
+   不是「整頁沒有邊」——最下方那條線是站台的收邊，走廊延伸到它為止 */
 
 .app__main {
   display: flex;

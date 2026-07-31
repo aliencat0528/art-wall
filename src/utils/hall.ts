@@ -13,7 +13,7 @@
  * 的水平距離只由透視縮放差決定，間距太小就會**互相重疊**（實測 460 時左右兩列
  * 各有兩件疊在一起）。
  */
-export const HALL_SPACING = 720
+export const HALL_SPACING = 500
 
 
 
