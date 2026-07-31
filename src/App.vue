@@ -86,7 +86,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app">
+  <div
+    class="app"
+    :class="{ 'app--hall': showHall }"
+  >
     <GalleryAtmosphere :view-key="railKey" />
 
     <SiteHeader
@@ -175,6 +178,21 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 100vh;
 }
+
+/**
+ * 走廊模式讓開站頭與頁尾的兩條 accent 橫線。
+ *
+ * 那兩條線是 MR-008 的「強調色貫穿站頭底線與頁尾」，在牆面模式下是對的；
+ * 但走廊是一個往上下延伸的空間，兩條滿版橫線加上走廊自己的邊界，
+ * 會把它框成畫面中間的一個長方形盒子。這裡只在走廊模式下把它們化掉，
+ * 牆面模式完全不受影響。
+ */
+.app--hall :deep(.header) {
+  border-bottom-color: transparent;
+}
+
+/* 頁尾那條 accent 線**保留**：使用者要的是「中間不要有框」，
+   不是「整頁沒有邊」——最下方那條線是站台的收邊，走廊延伸到它為止 */
 
 .app__main {
   display: flex;

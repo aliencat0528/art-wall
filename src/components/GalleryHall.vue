@@ -44,7 +44,10 @@ const step = ref(0)
 const hall = ref<HTMLElement | null>(null)
 /** 走動中：只用來把地板流速拉快一下，不影響任何位置計算 */
 const walking = ref(false)
+/** 剛抵達：讓「站到面前」那一件亮一下，是「我確實換到下一件了」最直接的回饋 */
+const arriving = ref(false)
 let walkTimer = 0
+let arriveTimer = 0
 
 const total = computed(() => props.works.length)
 const camera = computed(() => cameraZ(step.value))
@@ -70,10 +73,28 @@ function walk(delta: number): void {
   step.value = next
   walking.value = true
   window.clearTimeout(walkTimer)
-  // 720ms 是相機的補間長度，多留一點才不會在還在走的時候就把流速收回去
+  window.clearTimeout(arriveTimer)
+  arriving.value = false
+
+  /**
+   * 兩個時窗，長度刻意不同：
+   *
+   * - `walking` **1700ms**——地板加速與兩道行進光帶（`.hall__pulse`、
+   *   `.hall__wall::after`）都靠它。先前設 820ms，比動畫本身（1.05～1.15s）還短，
+   *   於是光帶跑到一半就被移除、憑空消失。**那正是「感受不到連接動畫」的主因**：
+   *   不是不夠亮，是根本沒播完。
+   * - `arriving` 在 **760ms** 觸發，也就是相機補間（720ms）剛停的那一刻。
+   *   它要對齊「到了」這件事，不能跟著 `walking` 一起拖到 1700ms。
+   */
   walkTimer = window.setTimeout(() => {
     walking.value = false
-  }, 820)
+  }, 1700)
+  arriveTimer = window.setTimeout(() => {
+    arriving.value = true
+    arriveTimer = window.setTimeout(() => {
+      arriving.value = false
+    }, 1100)
+  }, 760)
 }
 
 /**
@@ -89,7 +110,22 @@ const currentLabel = computed(() =>
   current.value ? categoryOf(current.value.category, categories.value).label : '',
 )
 
+/**
+ * 方向鍵掛在 **window** 上，**不靠 `.focus()` 把焦點搶過來**。
+ *
+ * 原本是掛載時呼叫 `hall.focus()`，讓方向鍵不必先點畫面就能用。代價是
+ * Chrome 把那次程式化 focus 判成 `:focus-visible`，於是 `.hall` 被畫上整圈
+ * 2px 的 accent 外框——**那就是一直被回報的「很明顯的長方形框」**。
+ * 它在部分擷取條件下不會出現（`matches(':focus-visible')` 回 false），
+ * 所以查了好幾輪才抓到。
+ *
+ * 改掛 window 之後：方向鍵照樣立刻可用、不搶焦點、也不畫框。
+ * `tabindex="0"` 與 `:focus-visible` 樣式保留給真正用 Tab 鍵聚焦的人。
+ */
 function onKeydown(event: KeyboardEvent): void {
+  // 詳情頁開著時方向鍵屬於它（切上一件／下一件），走廊不能同時吃
+  if (document.querySelector('.detail')) return
+
   switch (event.key) {
     case 'ArrowRight':
       walk(1)
@@ -123,12 +159,13 @@ watch(total, (next) => {
 })
 
 onMounted(() => {
-  // 進走廊就把焦點交給它，方向鍵才立刻能走（不必先點一下畫面）
-  hall.value?.focus()
+  window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
   window.clearTimeout(walkTimer)
+  window.clearTimeout(arriveTimer)
 })
 </script>
 
@@ -140,7 +177,6 @@ onBeforeUnmount(() => {
     tabindex="0"
     aria-label="走進展場"
     :style="{ '--cam': `${camera}px` }"
-    @keydown="onKeydown"
   >
     <p
       v-if="total === 0"
@@ -174,6 +210,12 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         >
           <span class="hall__flow" />
+          <span class="hall__ripple" />
+          <span
+            v-if="walking"
+            :key="`pulse-${step}`"
+            class="hall__pulse"
+          />
         </span>
 
         <button
@@ -181,7 +223,10 @@ onBeforeUnmount(() => {
           :key="item.work.id"
           type="button"
           class="piece"
-          :class="[`piece--${item.slot.side}`, { 'is-passed': item.passed }]"
+          :class="[
+            `piece--${item.slot.side}`,
+            { 'is-passed': item.passed, 'is-arriving': arriving && item.index === step },
+          ]"
           :style="{ '--depth': `${item.slot.depth}px` }"
           :data-index="item.index"
           :aria-label="`開啟作品：${item.work.title}`"
@@ -204,6 +249,16 @@ onBeforeUnmount(() => {
       v-if="total > 0"
       class="hall__hud"
     >
+      <button
+        type="button"
+        class="hall__step hall__step--start"
+        :disabled="step === 0"
+        title="回到入口"
+        @click="walk(-step)"
+      >
+        <span class="hall__step-label">⇤ START</span>
+        <span class="hall__step-icon">⇤</span>
+      </button>
       <button
         type="button"
         class="hall__step"
@@ -252,27 +307,80 @@ onBeforeUnmount(() => {
   --lateral: 380px;
   --piece-max-w: 520px;
   /**
-   * 高度上限受**走廊淨高**約束（`--ground` - `--ceil`，見下方房間段）：
-   *   作品總高 = --piece-max-h + 展籤 ~20，必須 < 淨高
+   * 高度上限受**走廊淨高**約束，而且**要把透視縮放算進去**（這是踩過的坑）：
+   *
+   *   --piece-max-h × 縮放 + 展籤 × 縮放  <  走廊淨高
+   *   縮放 = perspective / (perspective + HALL_LEAD) = 620 / 470 ≈ 1.32
+   *   240 × 1.32 + 20 × 1.32 = 343 < 446 ✓
+   *
+   * 還有一條：**作品上緣必須落在 mask 的淡出區之外**（`.hall__viewport` 上下各
+   * 淡出 8%），否則作品頂端會被淡掉，看起來就是「頂到上面」。
+   *
+   * 只算 CSS 尺寸不算縮放，就會像先前那樣「圖碰到上面頂端」——
+   * 390 看起來安全（390 + 20 < 424），乘上 1.17 之後是 480，早就穿出去了。
+   *
+   * **這也是「再更近一點」的天花板**：LEAD 越負縮放越大，可用的 `--piece-max-h`
+   * 就越小。近距離感其實主要來自**橫向被推出畫面**（`--lateral` × 縮放），
+   * 不是靠把作品撐高——撐高只會撞到天花板。
    * 超過就會穿出地板，被地板平面斜切掉一條（實測：作品底部多一條灰帶）。
    * 現值 390 + 20 = 410 < 424（1440×900 下淨高約 424px）。
    *
-   * **這個值決定直幅作品的存在感**：橫幅（3:2）是被 `--piece-max-w` 封住的，
-   * 直幅（2:3）則一路被高度封住——330 時直幅只有 220px 寬，面積不到橫幅一半，
-   * 讀起來就是「比較遠」。拉到 390 之後直幅是 260×390，兩種版位才等重。
+   * **這個值決定直幅作品的存在感**：橫幅（3:2）被 `--piece-max-w` 封住，
+   * 直幅（2:3）則一路被高度封住。
    */
-  --piece-max-h: 390px;
+  /**
+   * **必須跟著視窗高走**。走廊高度＝`.app__main` 的剩餘空間，視窗越矮它越矮；
+   * 寫死 px 在 1280×720 實測作品上緣是 **-3.1%**，整個頭被切掉。
+   * `36vh` 在 900 高時是 324、720 高時收到 259，兩邊都塞得下（實測上緣仍 > 8%）。
+   */
+  --piece-max-h: min(370px, 36vh);
 
   position: relative;
-  height: var(--rail-h);
+  /**
+   * **吃滿 `.app__main` 的剩餘空間**，不用 `--rail-h`。
+   *
+   * `--rail-h` 是為長廊的「一排卡片＋上下留白」設計的帶狀區；走廊用它會在上下
+   * 各留一段空白，下方的延展感就斷在那裡，地板也接不到頁尾那條收邊線。
+   *
+   * 曾試過寫死 `clamp(420px, 72vh, 720px)`，**退回了**：1280×720 下
+   * 走廊 518 + 站頭 138 + 頁尾 69 = 725 > 720 冒出垂直捲軸，捲軸吃掉寬度後
+   * 光氛層那些 `100vw` 固定層又撐出水平捲軸，兩條「不跑版」E2E 立刻變紅。
+   * `flex: 1` 沒有這個問題——它拿的是**剩下的**空間，本質上不可能超出。
+   */
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   outline: none;
-  /* 半透明：讓底下的光氛層與顆粒透出來，走廊才不是貼在畫面上的一塊黑板。
-     中心較透＝消失點發亮，這是最便宜的一條縱深線索 */
+}
+
+/**
+ * 走廊的暗底**放在 `::before` 並且跟著淡出**，不能直接掛在 `.hall` 上。
+ *
+ * 掛在 `.hall` 上時它不吃 `.hall__viewport` 的 mask，於是「有壓暗」與「沒壓暗」
+ * 在走廊上下緣突然切換——明暗突變會被眼睛讀成一條橫線，也就是那個
+ * 「上下黑色框線的邊界感」。實測把光氛層整個隱藏，那條線就消失，
+ * 證明它不是任何元素的 border，是這個對比邊。
+ *
+ * 中心較透＝消失點發亮，這是最便宜的一條縱深線索。
+ */
+.hall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: radial-gradient(
-    118% 78% at 50% 42%,
-    rgb(9 9 17 / 0.28),
-    rgb(4 4 9 / 0.88) 72%
+    128% 96% at 50% 38%,
+    rgb(9 9 17 / 0.02),
+    rgb(4 4 9 / 0.2) 78%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 8%,
+    /* 下緣不淡出：光波與網格要一路延伸到畫面最下方，
+       淡出會讓地板在半路收掉，下方就沒有延伸感了 */
+    #000 100%
   );
 }
 
@@ -294,8 +402,30 @@ onBeforeUnmount(() => {
   inset: 0;
   pointer-events: none;
   perspective: 620px;
-  /* 視點略高於畫面中線＝站著看的高度，與參考圖同 */
-  perspective-origin: 50% 44%;
+  /**
+   * 視點高度。44% ＝站著看；往下移會讓消失點下降、地板露得更多、
+   * 整條走廊在畫面上更靠下——「延展感」主要由這個值給，不是靠加大元素。
+   */
+  perspective-origin: 50% 52%;
+
+  /**
+   * 上下邊緣淡出，走廊才不會讀成**畫面中間一個明顯的長方形框**。
+   *
+   * `overflow: hidden` 給的是硬邊，加上站頭與頁尾各自的橫線，三條邊界疊在一起
+   * 就框出一個盒子。淡出之後走廊是「往上下延伸出去」而不是「裱在框裡」。
+   * 左右不淡出——那兩側本來就該被畫面切掉。
+   *
+   * **mask 掛在這一層而不是 `.hall`**：掛在 `.hall` 會把底下的 HUD
+   * （BACK／WALK ON／件數）一起淡掉，按鈕會糊成半透明。這一層只有 3D 場景。
+   */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 8%,
+    /* 下緣不淡出：光波與網格要一路延伸到畫面最下方，
+       淡出會讓地板在半路收掉，下方就沒有延伸感了 */
+    #000 100%
+  );
 }
 
 .hall__scene {
@@ -335,7 +465,7 @@ onBeforeUnmount(() => {
 .hall__viewport {
   /* 天地拉到最開，走廊淨高 76% × --rail-h ≈ 424px，作品才放得下 */
   --ceil: 0%;
-  --ground: 76%;
+  --ground: 94%;
   /* 房間近端離相機多遠。必須 < perspective(620)，否則跨越相機平面整塊爆掉 */
   --near: 560px;
   /* 房間長度。跟著相機走之後就是固定值，不必再依件數算 */
@@ -366,11 +496,76 @@ onBeforeUnmount(() => {
     ),
     linear-gradient(
       to right,
-      rgb(17 17 27 / 0.84) 0%,
-      rgb(11 11 20 / 0.52) 52%,
-      rgb(8 8 15 / 0.16) 100%
+      rgb(17 17 27 / 0.52) 0%,
+      rgb(11 11 20 / 0.26) 52%,
+      rgb(8 8 15 / 0.06) 100%
     ),
-    linear-gradient(to bottom, rgb(22 22 33 / 0.45), rgb(8 8 14 / 0.55));
+    linear-gradient(to bottom, rgb(22 22 33 / 0.2), rgb(8 8 14 / 0.26));
+}
+
+/**
+ * ── 掛畫線：把所有作品串成一條 ──────────────────────────
+ *
+ * 牆是 `rotateY(90deg)` 的，**局部的 Y 仍然是螢幕的 Y**，所以在牆上畫一條水平線，
+ * 在畫面上就是一條沿走廊縱深、收向消失點的線——它穿過每一件作品的中心高度，
+ * 視覺上把它們串起來。這是「連結」最直接的畫法：
+ * 先前只有地板波前與抵達脈衝，那兩個都是**事件**，事件結束就沒了，
+ * 沒有任何東西表示「這些作品屬於同一條動線」。
+ *
+ * 高度對齊 `.piece` 的 `top: 44%`。
+ */
+.hall__wall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 43.7%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 44%,
+    transparent 44.3%
+  );
+}
+
+/**
+ * 延續感：走動時，一段亮光沿著那條線往深處跑。
+ *
+ * 這一段跑的方向與距離就是「往前一件」——它從腳邊出發、越過下一件作品，
+ * 所以看得到的是「從這一件連到下一件」，而不只是「有東西亮了一下」。
+ */
+.hall__wall::after {
+  content: '';
+  position: absolute;
+  top: 43.4%;
+  height: 1.2%;
+  width: 900px;
+  opacity: 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--accent) 92%, transparent) 45%,
+    color-mix(in srgb, var(--ink) 70%, transparent) 55%,
+    transparent
+  );
+}
+
+.hall.is-walking .hall__wall::after {
+  animation: wall-run 1.55s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes wall-run {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(2600px);
+    opacity: 0;
+  }
 }
 
 /* 轉 90 度後局部 +X＝往場景深處，故往觀者延伸是 translateX 負值 */
@@ -381,11 +576,21 @@ onBeforeUnmount(() => {
   transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) translateX(calc(var(--near) * -1));
 }
 
+/**
+ * 右牆的 transform 與左牆**完全相同**，只有 `left` 不同。
+ *
+ * 原本多了一個 `scaleX(-1)` 想把漸層鏡像過來，結果**把後續 `translateX` 的方向
+ * 一起反轉**了——右牆不是往觀者延伸 `--near`，而是往深處縮了 `--near`，
+ * 近端切面就露在畫面右側，變成一塊有直角邊的長方形。
+ * 暗色 accent 下混在暗背景裡看不出來，換到淺色 accent（新媒體）就一眼看到。
+ *
+ * 拿掉 `scaleX(-1)` 之後，兩道牆的近端位置與漸層方向都一致。
+ * 法線朝向確實左右相反，但牆是純漸層、沒有 `backface-visibility`，看不出差別。
+ */
 .hall__wall--r {
   left: calc(50% + var(--half));
   transform-origin: left center;
-  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) scaleX(-1)
-    translateX(calc(var(--near) * -1));
+  transform: translateZ(calc(var(--cam) * -1)) rotateY(90deg) translateX(calc(var(--near) * -1));
 }
 
 /* 天花板：參考圖有，第一版漏了，於是畫面上緣直接穿幫露出背景光氛 */
@@ -400,8 +605,15 @@ onBeforeUnmount(() => {
   transform-origin: top center;
   transform: translateZ(calc(var(--cam) * -1)) rotateX(-90deg)
     translateY(calc(var(--near) * -1));
-  /* to top ＝往深處（rotateX(-90deg) 之後）。遠端幾乎全透，天花板才不會壓在畫面上 */
-  background: linear-gradient(to top, rgb(16 16 26 / 0.62), rgb(8 8 14 / 0.1) 62%);
+  /**
+   * to top ＝往深處（`rotateX(-90deg)` 之後）。
+   *
+   * **近端也只有 0.3 的 alpha**：先前 0.62 讓天花板在畫面上緣讀成一塊實心黑區，
+   * 與站頭之間出現一條硬邊。壓到 0.3 之後底下的光氛層透得出來，
+   * 天花板變成「暗處的一個面」而不是「貼上去的黑板」。
+   * 白色那版試過並退回（`5ecda0c` / `c4f967d`）——問題從來不是顏色，是不透明度。
+   */
+  background: linear-gradient(to top, rgb(14 14 24 / 0.16), rgb(8 8 14 / 0.02) 54%);
 }
 
 .hall__floor {
@@ -419,10 +631,11 @@ onBeforeUnmount(() => {
   background:
     repeating-linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 11%, transparent) 0 1px,
+      color-mix(in srgb, var(--accent) 13%, transparent) 0 1px,
       transparent 1px 150px
     ),
-    linear-gradient(to bottom, rgb(6 6 11 / 0.82), rgb(6 6 11 / 0.22));
+    /* 同天花板：近端從 0.82 壓到 0.34，地板才不是畫面下緣的一塊黑區 */
+    linear-gradient(to bottom, rgb(6 6 11 / 0.09), rgb(6 6 11 / 0));
 }
 
 /**
@@ -463,6 +676,80 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 
+/**
+ * 第二層流動：**週期與速度都和第一層不同**（900px／11s vs 640px／7s）。
+ *
+ * 兩層等速等距只會看成「一組線在平移」；錯開之後兩者時而重疊時而錯開，
+ * 起伏是自己長出來的，不是畫出來的——水波與銀河那種綿延感來自這裡。
+ * 邊界用大範圍的軟漸層（不是硬邊），才不會讀成掃描線。
+ */
+.hall__ripple {
+  position: absolute;
+  inset: -100% 0 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 240px,
+    color-mix(in srgb, var(--accent) 9%, transparent) 430px 470px,
+    transparent 660px 900px
+  );
+  animation: hall-ripple var(--ripple-dur, 11s) linear infinite;
+  will-change: transform;
+}
+
+@keyframes hall-ripple {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(900px);
+  }
+}
+
+/**
+ * 走動的波前：**每走一步射出一道往深處推的光帶**。
+ *
+ * 解的是「有沒有真的換到下一件」這個回饋——相機補間只有 720ms、
+ * 且作品之間相似時，光看畫面很難確定自己動了。
+ * 這道波前從腳下出發、穿過走廊、在下一件附近散掉，等於把「這一步」畫出來，
+ * 也把前後兩件視覺上串起來。
+ *
+ * 用 `:key="step"` 讓 Vue 每步重建這個元素——CSS 動畫只在元素建立時從頭播，
+ * 靠切 class 在連續走動時不會重播（class 還沒被移掉）。
+ */
+.hall__pulse {
+  position: absolute;
+  inset: -100% 0 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in srgb, var(--accent) 72%, transparent) 44%,
+    color-mix(in srgb, var(--ink) 46%, transparent) 50%,
+    color-mix(in srgb, var(--counter) 44%, transparent) 56%,
+    transparent 100%
+  );
+  background-size: 100% 720px;
+  background-repeat: no-repeat;
+  background-position: 0 50%;
+  animation: hall-pulse 1.6s var(--ease) both;
+}
+
+@keyframes hall-pulse {
+  from {
+    transform: translateY(-260px);
+    opacity: 0;
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(1500px);
+    opacity: 0;
+  }
+}
+
 @keyframes hall-flow {
   from {
     transform: translateY(0);
@@ -478,6 +765,10 @@ onBeforeUnmount(() => {
    只改變數不重設 animation，動畫才不會在切換的瞬間跳回起點 */
 .hall.is-walking .hall__flow {
   --flow-dur: 1.6s;
+}
+
+.hall.is-walking .hall__ripple {
+  --ripple-dur: 2.6s;
 }
 
 /**
@@ -497,9 +788,14 @@ onBeforeUnmount(() => {
 .piece {
   position: absolute;
   left: 50%;
-  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊。
-     38% 是配合 --piece-max-h 390 調的：40% 時直幅下緣會壓到地平線 */
-  top: 38%;
+  /**
+   * 掛畫線。**上下各有一條約束，44% 是同時滿足兩者的位置**（實測掃出來的）：
+   *   上緣 > 11%（`.hall__viewport` 的 mask 上下各淡出 8%，落進去就會被淡掉，
+   *              看起來就是「頂到上面」）
+   *   下緣 < 78%（地平線在 `--ground` 80%，壓過去會被地板切掉）
+   * 1440×900 實測：44% + `--piece-max-h: 240` → 上緣 12.3%、下緣 75.7%
+   */
+  top: 48%;
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -574,6 +870,28 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+/**
+ * 抵達脈衝：相機停下的那一刻，站到面前的那一件亮一下再收回去。
+ *
+ * 地板的波前是「這一步走了多遠」，這一下是「到的是這一件」——兩個回饋指的不是同一件事。
+ * 相機補間只有 720ms，作品長得像的時候光看位移很難確定換了沒有。
+ *
+ * 用 class 切換而不是 `:key` 重建：作品是圖片，重建會重新解碼一次。
+ * class 加上去就會從頭播動畫，這裡剛好夠用。
+ */
+.piece.is-arriving .piece__mat {
+  animation: piece-arrive 1.1s var(--ease);
+}
+
+@keyframes piece-arrive {
+  30% {
+    border-color: color-mix(in srgb, var(--accent) 85%, transparent);
+    box-shadow:
+      0 0 132px 2px color-mix(in srgb, var(--accent) 88%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
+}
+
 .piece:hover .piece__mat,
 .piece:focus-visible .piece__mat {
   box-shadow:
@@ -596,8 +914,17 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
-  padding: 0.9rem var(--page-x);
-  background: linear-gradient(to top, rgb(8 8 13 / 0.9), transparent);
+  /* 貼著下緣：走廊已經延伸到頁尾線，HUD 再往上就會壓在地板中央 */
+  padding: 0.35rem var(--page-x) 0.25rem;
+  /**
+   * **沒有底色**。原本是 `linear-gradient(to top, rgb(8 8 13 / 0.9), transparent)`，
+   * 想讓按鈕在亮地板上讀得清楚——但它不在 `.hall__viewport` 的 mask 裡，
+   * 底部 0.9 的不透明度又切齊走廊下緣，於是在畫面下方壓出一條**硬邊**。
+   * 那正是「上下有該色系的線條邊界」裡最明顯的下面那條。
+   *
+   * 拿掉之後按鈕仍然讀得清楚：它們各自有 `rgb(18 18 26 / 0.9)` 的底，
+   * 位置字另加一層文字陰影撐住對比。走廊因此直接延伸到頁尾，沒有斷點。
+   */
 }
 
 .hall__step {
@@ -624,12 +951,27 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+/* 回到入口：走深了之後要一步回到第一件，不必按十幾次 BACK。
+   走的是同一個 walk()，所以波前與地板加速一併照舊 */
+.hall__step--start {
+  letter-spacing: 0.16em;
+}
+
+.hall__step-icon {
+  display: none;
+}
+
 .hall__pos,
 .hall__empty {
   font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.1em;
   color: var(--ink-faint);
+}
+
+/* HUD 沒有底色之後，位置字要自己撐住對比——地板亮起來時才不會糊掉 */
+.hall__pos {
+  text-shadow: 0 1px 10px rgb(4 4 9 / 0.9), 0 0 3px rgb(4 4 9 / 0.8);
 }
 
 .hall__empty {
@@ -654,7 +996,7 @@ onBeforeUnmount(() => {
     --half: 380px;
     --lateral: 190px;
     --piece-max-w: 260px;
-    --piece-max-h: 260px;
+    --piece-max-h: 200px;
   }
 
   .hall__viewport {
@@ -685,8 +1027,22 @@ onBeforeUnmount(() => {
   }
 
   .hall__step {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.62rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.58rem;
+  }
+
+  /* 三顆鈕在窄螢幕會擠掉位置字，START 收成純圖示 */
+  .hall__step--start {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .hall__step-label {
+    display: none;
+  }
+
+  .hall__step-icon {
+    display: inline;
   }
 }
 
@@ -696,7 +1052,10 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .hall__flow {
+  .hall__flow,
+  .hall__ripple,
+  .hall__pulse,
+  .hall__wall::after {
     animation: none;
   }
 }

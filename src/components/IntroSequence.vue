@@ -27,6 +27,15 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') finish()
 }
 
+/**
+ * **整層都可以點掉，不只那顆 Skip 按鈕。**
+ *
+ * 手機上那顆鈕只有 122×40，而開場覆蓋整個畫面——使用者的直覺是「點畫面跳過」，
+ * 點在鈕以外的地方沒有反應，讀起來就是「跳過沒作用」。
+ * 用 `pointerdown` 而不是 `click`：手機上 click 有延遲，而且若手指有些微移動
+ * 會被判成拖曳而不觸發。
+ */
+
 onMounted(() => {
   autoTimer = window.setTimeout(finish, DURATION)
   window.addEventListener('keydown', onKeydown)
@@ -45,6 +54,7 @@ onBeforeUnmount(() => {
     class="intro"
     :class="{ 'is-leaving': leaving }"
     role="presentation"
+    @pointerdown="finish"
   >
     <div
       class="intro__stage"
