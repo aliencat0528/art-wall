@@ -87,6 +87,37 @@ test('走廊不把版面撐出水平捲軸', async ({ page }) => {
 })
 
 /**
+ * 硬要求 ②的補強：**窄一點的桌機寬度、而且要走過去才會踩到**。
+ *
+ * 作品的投影寬度取決於「當前那件的比例」——直幅只有 260px 寬，橫幅是 520px。
+ * 所以站在入口（第 1 件是直幅）量不出問題，走到橫幅那件才會看到它整個跑出視窗
+ * （1024 寬時實測 623→1113，超出右緣 89px；再走一步是 -88→401，超出左緣）。
+ *
+ * 這是**刻意的**（參考圖裡最近那件本來就會被畫面邊緣切掉），
+ * 靠 `.hall` 的 `overflow: hidden` 裁掉，整頁不該因此多出捲軸。
+ * 原本的溢出測試只在 1280 寬、且只走 3 步，剛好都停在直幅上，守不住這條。
+ */
+test('走到橫幅那件、在較窄的桌機寬度下也不撐出捲軸', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('./?intro=0&v=hall')
+  await expect(page.locator('.hall')).toBeVisible()
+
+  const overflowed = () =>
+    page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    )
+
+  for (let step = 0; step < 4; step += 1) {
+    expect(await overflowed()).toBe(false)
+    await page.getByRole('button', { name: 'WALK ON →' }).click()
+    await expect(page.locator('.hall__pos')).toContainText(`第 ${step + 2} /`)
+  }
+
+  // 走到這裡當前那件是橫幅，投影已經超出視窗兩側——但仍不該有捲軸
+  expect(await overflowed()).toBe(false)
+})
+
+/**
  * 硬要求 ③：作品點得開——而且是**走動之後**還點得開。
  * MR-014 踩過的坑（指標捕獲吃掉 click）就是走動之後才顯現的。
  */
