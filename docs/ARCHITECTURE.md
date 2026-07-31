@@ -26,7 +26,7 @@ flowchart TD
   subgraph view["視圖層"]
     APP["App.vue"]
     SH["SiteHeader.vue<br/>分類 / 展覽切換"]
-    GA["GalleryAtmosphere.vue<br/>暗場光氛（體積光／浮塵／掃描光／霧氣）"]
+    GA["GalleryAtmosphere.vue<br/>暗場光氛（體積光／浮塵／掃描光／霧氣／疊印色場／游標殘像）"]
     WR["WorkRail.vue<br/>長廊（景深＋拖曳＋逐件）／網格"]
     WC["WorkCard.vue"]
     WD["WorkDetail.vue"]
@@ -64,8 +64,10 @@ flowchart TD
 | `composables/useGallery.ts` | 依媒材/依展覽模式、篩選與詳情選取、網址同步 | 資料從哪來 |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
+| `composables/usePointerAfterimage.ts` | 游標殘像的兩組座標與淡出旗標寫進 `:root`（`--trail-*`） | 殘像長什麼樣（在光氛層的 CSS） |
+| `utils/motion.ts` | 互動動態的共用數學：`lerp`、拖曳速度→套色錯位倍率 `misregFor` | 誰在什麼時候呼叫 |
 | `composables/useImageZoom.ts` | 詳情頁的縮放與平移：上限換算（原圖像素 1:1）、錨點與邊界夾制、滑鼠／觸控手勢 | 圖從哪來、框多大（由 `WorkDetail` 的版面決定） |
-| `components/GalleryAtmosphere.vue` | 暗場光氛六層（主光暈／體積光／浮塵／霧氣／掃描光／暗角） | 作品本身的呈現 |
+| `components/GalleryAtmosphere.vue` | 暗場光氛八層（主光暈／體積光／浮塵／霧氣／掃描光／暗角＋疊印色場／游標殘像） | 作品本身的呈現 |
 | `composables/useSettings.ts` | 站台設定與分頁標題 | 作品資料 |
 | `utils/color.ts` | 由 accent 以 HSL 推導暗底 `accentDark`、疊印第二色版 `counterAccent`、對比度計算 | 顏色語意以外 |
 | `utils/image.ts` | 壓縮成縮圖／詳情用圖、比例偵測 | 儲存 |
@@ -112,6 +114,18 @@ flowchart TD
 
 游標視差由 `usePointerParallax` 寫成 `--mx` / `--my`（-1～1）：光氛層與長廊都直接吃根節點
 的這兩個值，不逐層傳 props——「整個空間一起偏」本來就是根節點層級的事。
+
+## 疊印視覺（MR-016）
+
+Risograph 的四個機制，全部落在**作品以外**——這是「要印刷質感」與 MR-008／MR-014
+「作品圖面不覆蓋任何色層」唯一不打架的界線（見 `prepare.md` 待討論 #5 的收斂）。
+
+| 機制 | 實作 | 界線與代價 |
+|------|------|-----------|
+| 顆粒 | `body::after` 鋪一張 feTurbulence 靜態噪點，`mix-blend-mode: overlay`、opacity 0.7 | z-index -1＝畫在光之上、**所有內容之下**，顆粒落在牆面不落在作品。零動畫，只光柵化一次 |
+| 疊印色場 | 光氛層三顆 `blur(60px)` 色圓（accent × 2、counter × 1），34～47s 各自漂移 | 呼吸用 `opacity` 不用 `scale`——縮放會逼模糊層每帧重新光柵化。動 `translate` 獨立屬性，把 `transform` 留給視差 |
+| 游標殘像 | `usePointerAfterimage` 每帧 lerp 出快慢兩組座標（0.22／0.10）寫成 `--trail-*`，停 0.7s 後 `--trail-on` 歸零 | 只掛 `mousemove`；rAF 在追上且閒置時自行收掉，不留常駐迴圈。`@media (hover: none)` 另外擋掉觸控裝置 |
+| 拖曳套色錯位 | 長廊拖曳速度 → `misregFor()` → 軌道上的 `--misreg`，卡片兩塊疊印光版的位移乘上它 | 拖曳中拿掉過渡（否則慢半拍），放手回到 1 就自然彈回；`prefers-reduced-motion` 下整條不啟用 |
 
 ## 長廊的景深與互動（MR-014）
 
