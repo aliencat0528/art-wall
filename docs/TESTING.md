@@ -35,6 +35,12 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 測試若在這段期間 `reload()`，那筆作品會整個消失——**看起來像持久化壞掉，其實是測試搶跑**。
 規則：驗持久化前，先等使用者看得到的結果出現（作品上牆），不要等固定秒數。
 
+**這條等待已收進 `createWork()` 這個 helper**（MR-017 收尾時改的），呼叫端不必各自處理。
+原本只有部分測試自己等，沒等的那條（「新增作品後立刻出現在牆上」）在機器忙的時候
+會偶發失敗，症狀看起來像功能壞了。**仍是已知的偶發項**：改完之後大多數整套跑都是綠的，
+但機器負載高時（同時開著另一個 Chrome、或剛跑完截圖腳本）還是可能掛。
+先關掉其他吃 CPU 的東西再重跑，不要急著改測試。
+
 **單元測試目前不涵蓋**（有意）：`useAppearance` / `useMediaQuery` / `useSettings` /
 `usePointerParallax` 偏 DOM 與媒體查詢，行為由 E2E 的整頁流程間接覆蓋；
 `useLibrary.replaceImage`（換圖）尚無專測，是已知缺口。
@@ -56,8 +62,24 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 > `requestAnimationFrame` 被節流，不是壞掉。要驗這一類東西就走 Playwright。
 
 > **E2E 超時要先懷疑資源競爭**：光氛層有常駐動畫，若同時開著 dev server 與另一個
-> 開著本站的瀏覽器分頁，整套 23 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
+> 開著本站的瀏覽器分頁，整套測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
 > 先關掉再重跑，不要急著改測試。
+>
+> **本機 worker 已釘在 2**（MR-017）。原本是預設值（依 CPU 核心數，實測開 4 個），
+> 測試數從 23 加到 35 之後，上面那個現象變成**穩定重現**——`atmosphere.spec.js`
+> 的兩個 rAF 時序測試在整套跑時必紅、單獨跑必綠。受測程式碼沒有問題，
+> 是同時有數個分頁在跑常駐動畫把 rAF 節流掉了。2 個 worker 下總時長約 33 秒。
+
+**走廊模式（MR-017）測的就是用戶指定的三條硬要求**——不卡住、不跑版、作品點得開。
+`e2e/hall.spec.js` 12 個測試涵蓋：切得進去／深連結、相機真的推進且到底停住、
+連按不掉步、**不撐出水平捲軸**、**走動後仍點得開作品**、切回牆面收乾淨且篩選還在、
+方向鍵不必先點畫面、減少動態不提供入口，以及**窄螢幕的降級版仍不跑版、仍點得開**。透視好不好看不測（視覺量值），
+純幾何在 `src/utils/hall.spec.ts`。
+
+> **走廊的點擊測試要指名 `data-index`，不能用 `.first()`**：可見窗口會保留相機後方
+> 一件，它在畫面上等於不存在，但 `boundingBox()` 仍算得出來，點下去只會打到底下的容器。
+> 開發時就是這樣抓到「viewport 攔截 pointer events」——`.hall__viewport` 是滿版元素，
+> 整條 3D 脈絡都要 `pointer-events: none`，只有作品那層收回來。
 
 ## 測試流程報告（四段式）
 
@@ -66,7 +88,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 83 tests 全過；build 產出 `dist/`；E2E 23 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 104 tests 全過；build 產出 `dist/`；E2E 35 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 

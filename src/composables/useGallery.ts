@@ -16,7 +16,17 @@ import { useLibrary } from '@/composables/useLibrary'
 
 type ViewMode = 'category' | 'exhibition'
 
+/**
+ * 版面：牆面（長廊／網格）或走廊（第一人稱，MR-017）。
+ *
+ * **與 `viewMode` 正交，不是第三個 viewMode**——走廊裡照樣可以是依媒材或依展覽，
+ * 篩選與呈現是兩件事。合成一個列舉會逼出「走廊＋展覽」這種答不出的組合。
+ * UI 上三顆鈕並排只是視覺分組，狀態上是兩個軸。
+ */
+type Layout = 'wall' | 'hall'
+
 const viewMode = ref<ViewMode>('category')
+const layout = ref<Layout>('wall')
 const activeCategory = ref<FilterId>('all')
 const activeExhibitionId = ref<string | null>(null)
 const selectedId = ref<string | null>(null)
@@ -64,6 +74,7 @@ function buildUrl(): string {
   } else if (activeCategory.value !== 'all') {
     params.set('c', activeCategory.value)
   }
+  if (layout.value === 'hall') params.set('v', 'hall')
   if (selectedId.value) params.set('w', selectedId.value)
   // `intro` 不屬於瀏覽狀態，但要跟著留在網址上——否則進站關掉開場後，
   // 切一次分類就把旗標洗掉，下次 reload 開場又冒出來（E2E 與現場展示都會踩到）
@@ -89,6 +100,7 @@ function readUrl(): void {
     const known = !!category && categories.value.some((item) => item.id === category)
     activeCategory.value = known ? (category as FilterId) : 'all'
   }
+  layout.value = params.get('v') === 'hall' ? 'hall' : 'wall'
   selectedId.value = params.get('w')
 }
 
@@ -116,6 +128,19 @@ export function useGallery() {
     } else {
       activeExhibitionId.value = null
     }
+    window.history.replaceState(null, '', buildUrl())
+  }
+
+  /**
+   * 切牆面／走廊。**篩選狀態一律保留**——切呈現方式不該把使用者選的分類洗掉，
+   * 這與 `setMode`（切篩選軸，要清掉另一軸）刻意不同。
+   */
+  function setLayout(next: Layout): void {
+    if (layout.value === next) return
+    layout.value = next
+    // 詳情頁關掉：走廊與牆面的「上一件／下一件」是同一份清單，但停在詳情頁上切版面
+    // 會讓使用者切完看不到任何變化，誤以為沒作用
+    selectedId.value = null
     window.history.replaceState(null, '', buildUrl())
   }
 
@@ -151,6 +176,7 @@ export function useGallery() {
     categories,
     exhibitions,
     viewMode,
+    layout,
     activeCategory,
     activeExhibitionId,
     activeExhibition,
@@ -159,6 +185,7 @@ export function useGallery() {
     railKey,
     setCategory,
     setMode,
+    setLayout,
     setExhibition,
     openWork,
     closeWork,

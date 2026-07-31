@@ -8,6 +8,7 @@ import type { Category, Exhibition, FilterId } from '@/types'
  */
 
 type ViewMode = 'category' | 'exhibition'
+type Layout = 'wall' | 'hall'
 
 defineProps<{
   categories: Category[]
@@ -18,11 +19,15 @@ defineProps<{
   viewMode: ViewMode
   exhibitions: Exhibition[]
   activeExhibitionId: string | null
+  layout: Layout
+  /** 走廊是否可用。窄螢幕與減少動態時整顆鈕不出現（MR-017） */
+  canHall: boolean
 }>()
 
 const emit = defineEmits<{
   select: [id: FilterId]
   selectMode: [mode: ViewMode]
+  selectLayout: [layout: Layout]
   selectExhibition: [id: string]
 }>()
 </script>
@@ -67,6 +72,35 @@ const emit = defineEmits<{
             @click="emit('selectMode', 'exhibition')"
           >
             依展覽
+          </button>
+        </div>
+
+        <!-- 走進展場：第三種呈現方式，與上面的篩選軸正交（MR-017）。
+             刻意不是預設入口——第一人稱代表訪客必須走才看得到第 5 件，
+             招募端不會走（知識檔限制 3 的 30 秒法則） -->
+        <div
+          v-if="canHall"
+          class="modes"
+          role="group"
+          aria-label="呈現方式"
+        >
+          <button
+            type="button"
+            class="mode"
+            :class="{ 'is-active': layout === 'wall' }"
+            :aria-pressed="layout === 'wall'"
+            @click="emit('selectLayout', 'wall')"
+          >
+            看牆面
+          </button>
+          <button
+            type="button"
+            class="mode"
+            :class="{ 'is-active': layout === 'hall' }"
+            :aria-pressed="layout === 'hall'"
+            @click="emit('selectLayout', 'hall')"
+          >
+            走進展場
           </button>
         </div>
 

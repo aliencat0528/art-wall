@@ -38,6 +38,16 @@ async function createWork(page, title = TITLE) {
   await panel.getByLabel('角色／我的貢獻').fill('創作')
 
   await panel.getByRole('button', { name: '新增作品', exact: true }).click()
+
+  // **在這裡等一次，不要讓每個呼叫端各自處理搶跑。**
+  // 圖片處理（canvas 縮圖 + toBlob）是非同步的，本機約 1.5～2 秒，平行跑更久。
+  // 呼叫端如果按完就關面板、接著斷言牆上第一張卡片，預設 5 秒逾時在機器忙的時候會不夠——
+  // 症狀是「新增作品後立刻出現在牆上」偶發失敗，看起來像功能壞了，其實是這條測試自己搶跑
+  // （docs/TESTING.md 的「先等使用者看得到的結果」規則，原本只有部分測試套用）。
+  // 用 toBeAttached 而非 toBeVisible：此時面板還蓋在牆上，只要卡片進了 DOM 就代表存完了。
+  await expect(page.getByRole('button', { name: `開啟作品：${title}` })).toBeAttached({
+    timeout: 20_000,
+  })
   return panel
 }
 

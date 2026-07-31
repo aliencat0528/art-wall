@@ -232,4 +232,79 @@ describe('useGallery', () => {
       expect(gallery.filteredWorks.value).toEqual([])
     })
   })
+
+  describe('版面切換：牆面／走廊（MR-017）', () => {
+    it('預設是牆面，網址不帶 v', async () => {
+      const gallery = await freshGallery()
+
+      expect(gallery.layout.value).toBe('wall')
+      expect(query()).not.toContain('v=')
+    })
+
+    it('切走廊會寫進網址，切回牆面則移除', async () => {
+      const gallery = await freshGallery()
+
+      gallery.setLayout('hall')
+      expect(gallery.layout.value).toBe('hall')
+      expect(query()).toContain('v=hall')
+
+      gallery.setLayout('wall')
+      expect(query()).not.toContain('v=hall')
+    })
+
+    /** 版面與篩選是兩個軸——切呈現方式不該把使用者選的分類洗掉 */
+    it('切版面時保留分類篩選', async () => {
+      const gallery = await freshGallery()
+      gallery.setCategory('watercolor')
+
+      gallery.setLayout('hall')
+
+      expect(gallery.activeCategory.value).toBe('watercolor')
+      expect(query()).toContain('c=watercolor')
+      expect(query()).toContain('v=hall')
+    })
+
+    it('切版面時關閉詳情頁——否則切完看不到變化，會以為沒作用', async () => {
+      const gallery = await freshGallery()
+      gallery.openWork('acr-001')
+      expect(gallery.selectedWork.value?.id).toBe('acr-001')
+
+      gallery.setLayout('hall')
+
+      expect(gallery.selectedWork.value).toBeNull()
+      expect(query()).not.toContain('w=')
+    })
+
+    it('走廊可與展覽模式並存——兩者正交，不是三選一', async () => {
+      const gallery = await freshGallery()
+      const { useLibrary } = await import('@/composables/useLibrary')
+      useLibrary().addExhibition({
+        id: 'ex-1',
+        title: '首展',
+        preface: '開場白',
+        workIds: ['acr-001', 'wtc-001'],
+      })
+      gallery.setExhibition('ex-1')
+
+      gallery.setLayout('hall')
+
+      expect(gallery.viewMode.value).toBe('exhibition')
+      expect(gallery.layout.value).toBe('hall')
+      expect(gallery.filteredWorks.value.map((w) => w.id)).toEqual(['acr-001', 'wtc-001'])
+    })
+
+    it('深連結 ?v=hall 還原成走廊', async () => {
+      const gallery = await freshGallery('?v=hall')
+      gallery.syncFromUrl()
+
+      expect(gallery.layout.value).toBe('hall')
+    })
+
+    it('v 帶垃圾值退回牆面，不留壞狀態', async () => {
+      const gallery = await freshGallery('?v=nope')
+      gallery.syncFromUrl()
+
+      expect(gallery.layout.value).toBe('wall')
+    })
+  })
 })

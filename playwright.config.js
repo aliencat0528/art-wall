@@ -19,7 +19,18 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  /**
+   * 本機也釘 2 個 worker（原本是 undefined＝依 CPU 核心數，實測開 4 個）。
+   *
+   * 理由是本套件有一批**吃 `requestAnimationFrame` 時序**的測試（游標殘像的追隨
+   * 與衰減、拖曳的套色錯位衰減）。worker 一多，同時有數個分頁在跑常駐動畫，
+   * rAF 被節流，這些測試就開始隨機失敗——**受測程式碼沒有問題**，
+   * 單獨跑 `atmosphere.spec.js` 一律全過。MR-016 已記過同一個現象
+   * （「E2E 超時要先懷疑資源競爭」），MR-017 把測試數從 23 加到 34 之後它變成穩定重現。
+   *
+   * 2 個 worker 下總時長約 50 秒，換到的是不會誤報的紅燈。
+   */
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI ? 'list' : 'html',
 
   use: {

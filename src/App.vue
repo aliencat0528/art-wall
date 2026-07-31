@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import EditorPanel from '@/components/EditorPanel.vue'
 import GalleryAtmosphere from '@/components/GalleryAtmosphere.vue'
+import GalleryHall from '@/components/GalleryHall.vue'
 import IntroSequence from '@/components/IntroSequence.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import WorkDetail from '@/components/WorkDetail.vue'
@@ -18,6 +19,7 @@ const {
   categories,
   exhibitions,
   viewMode,
+  layout,
   activeCategory,
   activeExhibitionId,
   activeExhibition,
@@ -26,6 +28,7 @@ const {
   railKey,
   setCategory,
   setMode,
+  setLayout,
   setExhibition,
   openWork,
   closeWork,
@@ -42,6 +45,21 @@ usePointerAfterimage()
 
 const reducedMotion = usePrefersReducedMotion()
 const editorOpen = ref(false)
+
+/**
+ * 走廊模式是否可用（MR-017）。
+ *
+ * **手機採「接受降級」而非「退回網格」**（待討論 #5，用戶拍板）：同一套程式碼跑到底，
+ * 窄螢幕只把走廊收窄、作品放大，一次看一件。代價是體驗明顯較差（見知識檔限制 2），
+ * 換到的是不必維護第二套窄螢幕版面與第二組 E2E。
+ *
+ * 唯一的排除條件是**減少動態**（限制 5）：走廊的價值全在位移補間，
+ * 開了減少動態就該直接不提供，而不是給一個瞬移版本。
+ */
+const canHall = computed(() => !reducedMotion.value)
+
+/** 條件消失時（縮窗、系統改設定）自動退回牆面，不留在一個已經不該存在的模式裡 */
+const showHall = computed(() => layout.value === 'hall' && canHall.value)
 
 const params = new URLSearchParams(window.location.search)
 
@@ -80,8 +98,11 @@ onBeforeUnmount(() => {
       :view-mode="viewMode"
       :exhibitions="exhibitions"
       :active-exhibition-id="activeExhibitionId"
+      :layout="layout"
+      :can-hall="canHall"
       @select="setCategory"
       @select-mode="setMode"
+      @select-layout="setLayout"
       @select-exhibition="setExhibition"
     />
 
@@ -92,7 +113,14 @@ onBeforeUnmount(() => {
       >
         {{ activeExhibition.preface }}
       </p>
+      <GalleryHall
+        v-if="showHall"
+        :works="filteredWorks"
+        :view-key="railKey"
+        @open="openWork"
+      />
       <WorkRail
+        v-else
         :works="filteredWorks"
         :view-key="railKey"
         @open="openWork"
@@ -101,7 +129,11 @@ onBeforeUnmount(() => {
 
     <footer class="app__footer">
       <p class="app__hint">
-        拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節
+        {{
+          showHall
+            ? '方向鍵或下方按鈕往前走 · 點擊作品看細節'
+            : '拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節'
+        }}
       </p>
       <div class="app__footer-right">
         <button
