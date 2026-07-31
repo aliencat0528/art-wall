@@ -241,21 +241,39 @@ onBeforeUnmount(() => {
   /* 牆面離中軸的距離＝走廊半寬。手機收窄（見檔末的降級段） */
   /**
    * 這三個值有一條**必須成立的不等式**：
-   *   --lateral + (--piece-max-w + 裱框 36px) / 2  <  --half
+   *   --lateral + --piece-max-w / 2  <  --half
+   * 現值 380 + 260 = 640 < 760；手機 190 + 130 = 320 < 380
+   *（作品已無裱框 padding，見 `.piece__mat`）
    * 看板是平行螢幕的平面、牆是縱深平面，兩者一定會相交——作品只要橫向超出牆的位置，
    * 靠近相機的那半就跑到牆外，被牆斜切掉一角（實測畫面：左右兩件各缺一個角）。
    * 改任何一個都要重算這條，不然就會再看到切角。
    */
-  --half: 520px;
-  --lateral: 260px;
-  --piece-max-w: 400px;
-  --piece-max-h: 300px;
+  --half: 760px;
+  --lateral: 380px;
+  --piece-max-w: 520px;
+  /**
+   * 高度上限受**走廊淨高**約束（`--ground` - `--ceil`，見下方房間段）：
+   *   作品總高 = --piece-max-h + 展籤 ~20，必須 < 淨高
+   * 超過就會穿出地板，被地板平面斜切掉一條（實測：作品底部多一條灰帶）。
+   * 現值 390 + 20 = 410 < 424（1440×900 下淨高約 424px）。
+   *
+   * **這個值決定直幅作品的存在感**：橫幅（3:2）是被 `--piece-max-w` 封住的，
+   * 直幅（2:3）則一路被高度封住——330 時直幅只有 220px 寬，面積不到橫幅一半，
+   * 讀起來就是「比較遠」。拉到 390 之後直幅是 260×390，兩種版位才等重。
+   */
+  --piece-max-h: 390px;
 
   position: relative;
   height: var(--rail-h);
   overflow: hidden;
   outline: none;
-  background: #06060b;
+  /* 半透明：讓底下的光氛層與顆粒透出來，走廊才不是貼在畫面上的一塊黑板。
+     中心較透＝消失點發亮，這是最便宜的一條縱深線索 */
+  background: radial-gradient(
+    118% 78% at 50% 42%,
+    rgb(9 9 17 / 0.28),
+    rgb(4 4 9 / 0.88) 72%
+  );
 }
 
 .hall:focus-visible {
@@ -315,8 +333,9 @@ onBeforeUnmount(() => {
  * 又不會碰到相機平面。
  */
 .hall__viewport {
-  --ceil: 4%;
-  --ground: 68%;
+  /* 天地拉到最開，走廊淨高 76% × --rail-h ≈ 424px，作品才放得下 */
+  --ceil: 0%;
+  --ground: 76%;
   /* 房間近端離相機多遠。必須 < perspective(620)，否則跨越相機平面整塊爆掉 */
   --near: 560px;
   /* 房間長度。跟著相機走之後就是固定值，不必再依件數算 */
@@ -331,13 +350,27 @@ onBeforeUnmount(() => {
   height: calc(var(--ground) - var(--ceil));
   width: var(--depth-span);
   pointer-events: none;
+  /**
+   * 牆是**半透明疊加**，不是實心板。
+   *
+   * `to right` 對牆而言就是「由近到遠」（`rotateY(90deg)` 之後 local +X ＝往深處），
+   * 所以遠端 alpha 收到 0.16——消失點附近讓背景光氛透出來，深度靠亮度差讀出來，
+   * 不是靠再畫一層更黑的東西。這也讓走廊和站台其他部分是同一個空間，
+   * 而不是嵌在畫面上的一個盒子。
+   */
   background:
     linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      transparent 46%
+      color-mix(in srgb, var(--accent) 11%, transparent),
+      transparent 42%
     ),
-    linear-gradient(to bottom, #12121b, #0e0e16 52%, #08080e);
+    linear-gradient(
+      to right,
+      rgb(17 17 27 / 0.84) 0%,
+      rgb(11 11 20 / 0.52) 52%,
+      rgb(8 8 15 / 0.16) 100%
+    ),
+    linear-gradient(to bottom, rgb(22 22 33 / 0.45), rgb(8 8 14 / 0.55));
 }
 
 /* 轉 90 度後局部 +X＝往場景深處，故往觀者延伸是 translateX 負值 */
@@ -367,7 +400,8 @@ onBeforeUnmount(() => {
   transform-origin: top center;
   transform: translateZ(calc(var(--cam) * -1)) rotateX(-90deg)
     translateY(calc(var(--near) * -1));
-  background: linear-gradient(to top, #0f0f18, #08080e 60%);
+  /* to top ＝往深處（rotateX(-90deg) 之後）。遠端幾乎全透，天花板才不會壓在畫面上 */
+  background: linear-gradient(to top, rgb(16 16 26 / 0.62), rgb(8 8 14 / 0.1) 62%);
 }
 
 .hall__floor {
@@ -385,10 +419,10 @@ onBeforeUnmount(() => {
   background:
     repeating-linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 10%, transparent) 0 1px,
+      color-mix(in srgb, var(--accent) 11%, transparent) 0 1px,
       transparent 1px 150px
     ),
-    #06060b;
+    linear-gradient(to bottom, rgb(6 6 11 / 0.82), rgb(6 6 11 / 0.22));
 }
 
 /**
@@ -404,12 +438,27 @@ onBeforeUnmount(() => {
 .hall__flow {
   position: absolute;
   inset: -100% 0 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 300px,
-    color-mix(in srgb, var(--accent) 13%, transparent) 340px 366px,
-    transparent 406px 640px
-  );
+  /**
+   * 兩層疊在一起，週期必須是 640 的因數才循環得無縫（160 × 4 = 640）：
+   *
+   * 1. **密的橫向刻度**（每 160px 一條細線）——垂直於前進方向的線是最強的距離線索。
+   *    地板底層只有縱向線（沿深度收向消失點），那條給的是「方向」不是「距離」，
+   *    走起來會覺得空間很平。**橫線要放在會流動的這一層**：房間跟著相機走，
+   *    畫在地板底層的橫線不會動，等於白畫。
+   * 2. 原本的寬亮帶——一道道往深處推進的光波。
+   */
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent) 16%, transparent) 0 1px,
+      transparent 1px 160px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 300px,
+      color-mix(in srgb, var(--accent) 13%, transparent) 340px 366px,
+      transparent 406px 640px
+    );
   animation: hall-flow var(--flow-dur, 7s) linear infinite;
   will-change: transform;
 }
@@ -448,8 +497,9 @@ onBeforeUnmount(() => {
 .piece {
   position: absolute;
   left: 50%;
-  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊 */
-  top: 40%;
+  /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊。
+     38% 是配合 --piece-max-h 390 調的：40% 時直幅下緣會壓到地平線 */
+  top: 38%;
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
   pointer-events: auto;
@@ -468,15 +518,24 @@ onBeforeUnmount(() => {
   transform: translate3d(calc(-50% + var(--lateral)), -50%, calc(var(--depth) * -1));
 }
 
-/* 裱框白邊：作品不直接貼牆。暗場版的「白」是壓到很暗的中性面板，
-   否則一塊真白會在暗場裡變成畫面上最亮的東西，把作品壓下去 */
+/**
+ * **作品沒有裱框**——邊界只由一條光線界定，用的是牆面同一套語彙。
+ *
+ * 走過兩版才收斂到這裡：
+ *   1. `--ink 12%` 的實心深色面板 → 在暗場裡讀成一塊板子，作品像貼在畫面前
+ *   2. 透明底 + 14px padding → **還是黑框**。作品是亮白的，padding 區透出的
+ *      牆面再暗一點都會被讀成一圈黑邊，跟背景是什麼顏色無關，是對比造成的
+ *
+ * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有一條 accent 細線與光暈。
+ * 這與 MR-014「色彩只落在光與外框」是同一條原則——界定邊界的是光，不是色塊。
+ */
 .piece__mat {
   display: block;
-  padding: 18px;
-  background: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   box-shadow:
-    0 0 60px -12px var(--accent),
-    0 30px 60px rgb(0 0 0 / 0.7);
+    0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 20px 46px rgb(0 0 0 / 0.42);
 }
 
 .piece__image {
@@ -518,8 +577,8 @@ onBeforeUnmount(() => {
 .piece:hover .piece__mat,
 .piece:focus-visible .piece__mat {
   box-shadow:
-    0 0 80px -6px var(--accent),
-    0 30px 60px rgb(0 0 0 / 0.7);
+    0 0 92px -2px color-mix(in srgb, var(--accent) 78%, transparent),
+    0 24px 54px rgb(0 0 0 / 0.5);
 }
 
 .piece:focus-visible {
@@ -591,17 +650,16 @@ onBeforeUnmount(() => {
  */
 @media (max-width: 899px) {
   .hall {
-    /* 同樣要滿足上面那條不等式：150 + (230+36)/2 = 283 < 300 */
-    --half: 300px;
-    --lateral: 150px;
-    --piece-max-w: 230px;
-    --piece-max-h: 190px;
+    /* 同樣要滿足上面那條不等式：190 + (260+28)/2 = 334 < 380 */
+    --half: 380px;
+    --lateral: 190px;
+    --piece-max-w: 260px;
+    --piece-max-h: 260px;
   }
 
   .hall__viewport {
-    /* 手機視野窄，天地要收一點，作品才有位置 */
-    --ceil: 2%;
-    --ground: 72%;
+    --ceil: 0%;
+    --ground: 78%;
 
     perspective: 460px;
   }
