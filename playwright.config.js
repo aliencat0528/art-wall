@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 // 用 .js 而非 .ts：本機 Node 18.12 + "type":"module" 下，Playwright 無法透過
 // Node 的 ESM loader 載入 .ts 設定檔（ERR_UNKNOWN_FILE_EXTENSION）。
-// 測試檔仍是 .ts——那些由 Playwright 自己的 bundler 轉譯，不受影響。見 MR-013。
+// E2E 測試檔同樣是 .js，理由相同（見 MR-013 與 docs/TESTING.md 的版本鎖）。
 
 const PORT = 4173
 // vite base 是 /art-wall/，preview 也吃這個前綴，網址少一層就會 404

@@ -109,3 +109,44 @@ test('不合法的分類代號退回全部，不是空白畫面', async ({ page 
     'true',
   )
 })
+
+test('詳情頁雙擊放大、拖得動，而且拖曳不會把詳情關掉', async ({ page }) => {
+  await page.goto('./?intro=0&c=sculpture')
+  await page.getByRole('button', { name: /^開啟作品：/ }).first().click()
+
+  const viewport = page.locator('.detail__viewport')
+  const image = page.locator('.detail__image')
+  await expect(image).toBeVisible()
+  await expect(viewport).toHaveClass(/detail__viewport--zoomable/)
+
+  await viewport.dblclick()
+  const zoomed = await image.evaluate((el) => el.style.transform)
+  expect(zoomed).not.toContain('scale(1)')
+
+  // 拖移。MR-014 在長廊踩過的指標捕獲陷阱若復發，詳情會在這一步被關掉
+  const box = await viewport.boundingBox()
+  const cx = box.x + box.width / 2
+  const cy = box.y + box.height / 2
+  await page.mouse.move(cx, cy)
+  await page.mouse.down()
+  await page.mouse.move(cx - 80, cy - 60, { steps: 8 })
+  await page.mouse.up()
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+  expect(await image.evaluate((el) => el.style.transform)).not.toBe(zoomed)
+})
+
+test('放大後切到下一件會回到 fit，不會停在上一件的縮放位置', async ({ page }) => {
+  await page.goto('./?intro=0&c=sculpture')
+  await page.getByRole('button', { name: /^開啟作品：/ }).first().click()
+
+  const image = page.locator('.detail__image')
+  await page.locator('.detail__viewport').dblclick()
+  expect(await image.evaluate((el) => el.style.transform)).not.toContain('scale(1)')
+
+  await page.getByRole('button', { name: '下一件' }).click()
+
+  await expect
+    .poll(() => image.evaluate((el) => el.style.transform))
+    .toContain('scale(1)')
+})
