@@ -2,7 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Work } from '@/types'
 import WorkCard from '@/components/WorkCard.vue'
-import { useIsWide } from '@/composables/useMediaQuery'
+import { useIsWide, usePrefersReducedMotion } from '@/composables/useMediaQuery'
+import { lerp, misregFor } from '@/utils/motion'
 
 /**
  * 作品牆本體。
@@ -20,6 +21,7 @@ const props = defineProps<{ works: Work[]; viewKey: string }>()
 const emit = defineEmits<{ open: [id: string] }>()
 
 const isWide = useIsWide()
+const reducedMotion = usePrefersReducedMotion()
 const rail = ref<HTMLElement | null>(null)
 const progress = ref(0)
 /** 目前站在誰面前（`--focus` 最大的那件），給計數器與鍵盤逐件瀏覽用 */
@@ -136,6 +138,32 @@ let dragScroll = 0
 let dragging = false
 let moved = false
 
+/**
+ * 拖曳速度 → 套色錯位（MR-016）。拖得越快，卡片上那兩塊疊印光版分得越開，
+ * 放手才收回去——Risograph 走紙越快套色偏得越多，這裡借的是同一件事。
+ *
+ * 值寫在軌道上讓卡片繼承（`--misreg`），理由同 `--focus`：吃這個值的是每一張
+ * 卡片的兩個偽層，用 props 串下去等於為了一個數字改穿三層元件。
+ */
+let lastMoveAt = 0
+let lastMoveX = 0
+let misreg = 1
+let decayFrame = 0
+
+function writeMisreg(value: number): void {
+  misreg = value
+  rail.value?.style.setProperty('--misreg', value.toFixed(2))
+}
+
+/** 停住不動時速度必須自己掉回來——沒有事件會來通知「手停了」 */
+function decay(): void {
+  if (!dragging) return
+  const next = lerp(misreg, 1, 0.12)
+  // 收尾直接歸位：lerp 只會無限逼近，而 toFixed(2) 會讓它卡在 1.01 永遠不動
+  writeMisreg(next - 1 < 0.02 ? 1 : next)
+  decayFrame = requestAnimationFrame(decay)
+}
+
 function onPointerDown(event: PointerEvent): void {
   const el = rail.value
   if (!el || !isWide.value || event.pointerType !== 'mouse' || event.button !== 0) return
@@ -143,6 +171,12 @@ function onPointerDown(event: PointerEvent): void {
   moved = false
   dragFrom = event.clientX
   dragScroll = el.scrollLeft
+  lastMoveAt = event.timeStamp
+  lastMoveX = event.clientX
+  if (!reducedMotion.value) {
+    el.classList.add('wall__track--dragging')
+    decayFrame = requestAnimationFrame(decay)
+  }
   // 拖到長廊外（甚至視窗外）也要收得到，故監聽掛在 window 上。
   //
   // **不要改用 `setPointerCapture`**：指標捕獲會把後續的 `click` 一起改派給
@@ -159,12 +193,29 @@ function onPointerMove(event: PointerEvent): void {
   if (!moved && Math.abs(dx) < DRAG_THRESHOLD) return
   moved = true
   el.scrollLeft = dragScroll - dx
+
+  if (reducedMotion.value) return
+  const elapsed = event.timeStamp - lastMoveAt
+  // 同一帧內的第二個事件會讓 elapsed 為 0，除下去是 Infinity
+  if (elapsed > 0) {
+    const velocity = (event.clientX - lastMoveX) / elapsed
+    writeMisreg(Math.max(misreg, misregFor(velocity)))
+    lastMoveAt = event.timeStamp
+    lastMoveX = event.clientX
+  }
 }
 
 function onPointerUp(): void {
   dragging = false
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
+  if (decayFrame) {
+    cancelAnimationFrame(decayFrame)
+    decayFrame = 0
+  }
+  // 放手就收回：拿掉 dragging 類別讓 transition 回來，錯位自己彈回原位
+  rail.value?.classList.remove('wall__track--dragging')
+  writeMisreg(1)
 }
 
 /**
@@ -452,6 +503,12 @@ watch([() => props.works, () => props.viewKey], async () => {
 .wall--rail :deep(.card__pool) {
   display: block;
   opacity: calc(0.32 + var(--focus, 1) * 0.53);
+}
+
+/* 拖曳中把疊印框的過渡關掉：`--misreg` 每帧都在變，留著 320ms 過渡等於
+   永遠追不上手，錯位會慢半拍。放手時類別移除、過渡回來，自然變成彈回 */
+.wall__track--dragging :deep(.card__reg) {
+  transition: none;
 }
 
 .wall--rail :deep(.card__spot) {
