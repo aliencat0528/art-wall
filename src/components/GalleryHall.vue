@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
   /**
    * 這三個值有一條**必須成立的不等式**：
    *   --lateral + --piece-max-w / 2  <  --half
-   * 現值 380 + 260 = 640 < 760；手機 190 + 130 = 320 < 380
+   * 現值 380 + 310 = 690 < 760；手機 190 + 130 = 320 < 380
    *（作品已無裱框 padding，見 `.piece__mat`）
    * 看板是平行螢幕的平面、牆是縱深平面，兩者一定會相交——作品只要橫向超出牆的位置，
    * 靠近相機的那半就跑到牆外，被牆斜切掉一角（實測畫面：左右兩件各缺一個角）。
@@ -250,21 +250,28 @@ onBeforeUnmount(() => {
    */
   --half: 760px;
   --lateral: 380px;
-  --piece-max-w: 520px;
+  --piece-max-w: 620px;
   /**
    * 高度上限受**走廊淨高**約束（`--ground` - `--ceil`，見下方房間段）：
    *   作品總高 = --piece-max-h + 展籤 ~20，必須 < 淨高
    * 超過就會穿出地板，被地板平面斜切掉一條（實測：作品底部多一條灰帶）。
-   * 現值 390 + 20 = 410 < 424（1440×900 下淨高約 424px）。
+   * 現值 440 + 20 = 460 < 492（1440×900 下走廊高 648px、淨高 76% ≈ 492px）。
    *
    * **這個值決定直幅作品的存在感**：橫幅（3:2）是被 `--piece-max-w` 封住的，
    * 直幅（2:3）則一路被高度封住——330 時直幅只有 220px 寬，面積不到橫幅一半，
    * 讀起來就是「比較遠」。拉到 390 之後直幅是 260×390，兩種版位才等重。
    */
-  --piece-max-h: 390px;
+  --piece-max-h: 440px;
 
-  position: relative;
-  height: var(--rail-h);
+  /**
+   * 走廊有自己的高度，**不吃 `--rail-h`**。
+   *
+   * 長廊模式的 `--rail-h`（62vh 的帶狀區）是為了「一排卡片 + 上下留白」設計的；
+   * 走廊要的是沉浸，帶狀區會讓整個房間縮成畫面中間一條，作品跟著被壓小。
+   * 這不影響「版面尺寸唯一真相」——走廊裡的東西全在 3D 場景內，
+   * `transform` 不改 layout box，這裡改的只是那個取景框本身多高。
+   */
+  height: clamp(420px, 72vh, 720px);
   overflow: hidden;
   outline: none;
   /* 半透明：讓底下的光氛層與顆粒透出來，走廊才不是貼在畫面上的一塊黑板。
@@ -498,7 +505,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 50%;
   /* 掛在視平線略上方＝實體展場的掛畫高度，與 perspective-origin 的 44% 對齊。
-     38% 是配合 --piece-max-h 390 調的：40% 時直幅下緣會壓到地平線 */
+     38% 是配合 --piece-max-h 調的：再低下去直幅下緣會壓到地平線 */
   top: 38%;
   padding: 0;
   /* 整條 3D 脈絡都是 none，作品這層要自己收回來 */
@@ -519,23 +526,31 @@ onBeforeUnmount(() => {
 }
 
 /**
- * **作品沒有裱框**——邊界只由一條光線界定，用的是牆面同一套語彙。
+ * 裱框＝**牆面色調的框線 + 同色調的位移陰影**（參考圖的做法）。
  *
- * 走過兩版才收斂到這裡：
- *   1. `--ink 12%` 的實心深色面板 → 在暗場裡讀成一塊板子，作品像貼在畫面前
- *   2. 透明底 + 14px padding → **還是黑框**。作品是亮白的，padding 區透出的
- *      牆面再暗一點都會被讀成一圈黑邊，跟背景是什麼顏色無關，是對比造成的
+ * 這是第三版，前兩版都失敗：
+ *   1. `--ink 12%` 實心深色面板 → 讀成一塊獨立的板子
+ *   2. 透明底 + padding → **仍是黑框**：作品是亮白的，padding 區透出的牆再暗
+ *      一點都被讀成黑邊。是對比造成的，跟背景什麼顏色無關
  *
- * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有一條 accent 細線與光暈。
- * 這與 MR-014「色彩只落在光與外框」是同一條原則——界定邊界的是光，不是色塊。
+ * 關鍵在於**框要比牆亮、不是比牆暗**。參考圖是白裱紙落在淺灰牆上，
+ * 暗場的對應是「比牆亮一階的中性面」——所以取 `--ink 14%` 混進牆色，
+ * 亮到讀得出是一張裱紙，又不會變成畫面上最亮的東西（那是作品的位置）。
+ *
+ * 陰影是**硬邊位移**不是模糊光暈：參考圖每件作品右下都有一塊實心灰影，
+ * 那正是「作品浮離牆面」最省的線索（MR-014 歸因表裡投報率最高的一條）。
+ * 顏色取牆的暗調而不是純黑，才貼在同一個色調系統裡。
  */
 .piece__mat {
   display: block;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  padding: 13px;
+  background: color-mix(in srgb, var(--ink) 14%, #141420);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   box-shadow:
-    0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
-    0 20px 46px rgb(0 0 0 / 0.42);
+    /* 硬邊位移陰影：作品浮離牆面 */
+    22px 24px 0 -1px rgb(5 5 11 / 0.55),
+    /* 外圍光暈：暗場裡把作品從牆上「打亮」，與 WorkCard 的聚光同一套 */
+    0 0 84px -8px color-mix(in srgb, var(--accent) 48%, transparent);
 }
 
 .piece__image {
@@ -577,8 +592,8 @@ onBeforeUnmount(() => {
 .piece:hover .piece__mat,
 .piece:focus-visible .piece__mat {
   box-shadow:
-    0 0 92px -2px color-mix(in srgb, var(--accent) 78%, transparent),
-    0 24px 54px rgb(0 0 0 / 0.5);
+    22px 24px 0 -1px rgb(5 5 11 / 0.55),
+    0 0 104px -2px color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 .piece:focus-visible {
@@ -654,7 +669,7 @@ onBeforeUnmount(() => {
     --half: 380px;
     --lateral: 190px;
     --piece-max-w: 260px;
-    --piece-max-h: 260px;
+    --piece-max-h: 300px;
   }
 
   .hall__viewport {
@@ -665,7 +680,10 @@ onBeforeUnmount(() => {
   }
 
   .piece__mat {
-    padding: 10px;
+    padding: 9px;
+    box-shadow:
+      13px 14px 0 -1px rgb(5 5 11 / 0.55),
+      0 0 56px -8px color-mix(in srgb, var(--accent) 48%, transparent);
   }
 
   .hall__hud {
