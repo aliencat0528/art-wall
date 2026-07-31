@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Work } from '@/types'
 import { categoryOf } from '@/data/categories'
 import { useLibrary } from '@/composables/useLibrary'
+import { useImageZoom } from '@/composables/useImageZoom'
 
 /**
  * 作品詳情。
  *
  * 這裡才載原圖（`work.src`），且圖仍受比例與 60vh 高度上限約束——
  * 牆上看不到全圖的問題在這一層解決，而不是把牆上的縮圖放大。
+ * 要看筆觸則再往下一層：在這個框內放大與平移（MR-015，見 `useImageZoom`）。
  */
 
 const props = defineProps<{ work: Work }>()
@@ -16,6 +18,31 @@ const emit = defineEmits<{ close: []; step: [delta: number] }>()
 
 const panel = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
+const viewport = ref<HTMLElement | null>(null)
+const image = ref<HTMLImageElement | null>(null)
+
+const {
+  scale,
+  offset,
+  zoomable,
+  zoomed,
+  dragging,
+  measure,
+  reset: resetZoom,
+  onWheel,
+  onDoubleClick,
+  onMouseDown,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+} = useImageZoom(viewport, image)
+
+const imageStyle = computed(() => ({
+  transform: `translate3d(${offset.value.x}px, ${offset.value.y}px, 0) scale(${scale.value})`,
+}))
+
+// 切到上／下一件就回到 fit：留著上一件的縮放位置，新作品會從某個角落開場
+watch(() => props.work.id, resetZoom)
 
 const { categories } = useLibrary()
 const category = computed(() => categoryOf(props.work.category, categories.value))
@@ -60,12 +87,14 @@ function onKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', measure)
   document.body.style.overflow = 'hidden'
   closeButton.value?.focus()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', measure)
   document.body.style.overflow = ''
 })
 </script>
@@ -119,14 +148,41 @@ onBeforeUnmount(() => {
 
       <div class="detail__body">
         <figure class="detail__figure">
-          <img
-            class="detail__image"
-            :src="work.src"
-            :alt="work.alt"
-            :width="work.width"
-            :height="work.height"
-            decoding="async"
+          <div
+            ref="viewport"
+            class="detail__viewport"
+            :class="{
+              'detail__viewport--zoomable': zoomable,
+              'detail__viewport--zoomed': zoomed,
+              'detail__viewport--dragging': dragging,
+            }"
+            @wheel="onWheel"
+            @dblclick="onDoubleClick"
+            @mousedown="onMouseDown"
+            @touchstart="onTouchStart"
+            @touchmove="onTouchMove"
+            @touchend="onTouchEnd"
+            @touchcancel="onTouchEnd"
           >
+            <img
+              ref="image"
+              class="detail__image"
+              :src="work.src"
+              :alt="work.alt"
+              :width="work.width"
+              :height="work.height"
+              :style="imageStyle"
+              draggable="false"
+              decoding="async"
+              @load="measure"
+            >
+          </div>
+          <figcaption
+            v-if="zoomable"
+            class="detail__zoomhint"
+          >
+            {{ zoomed ? '拖曳移動 · 雙擊還原' : '雙擊或滾輪放大' }}
+          </figcaption>
         </figure>
 
         <div class="detail__text">
@@ -277,8 +333,36 @@ onBeforeUnmount(() => {
 
 .detail__figure {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 放大後溢出的部分裁在這個框內。框＝作品的邊界，圖再大也不會蓋到旁邊的文字欄。
+   inline-block 讓框貼著圖的實際尺寸收縮，維持「外框緊貼畫面」的原樣 */
+.detail__viewport {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  /* 未放大時單指要能捲動面板，放大後才由 JS 接管（見 useImageZoom） */
+  touch-action: pan-y;
+}
+
+.detail__viewport--zoomable {
+  cursor: zoom-in;
+}
+
+.detail__viewport--zoomed {
+  cursor: grab;
+  touch-action: none;
+}
+
+.detail__viewport--dragging {
+  cursor: grabbing;
 }
 
 .detail__image {
@@ -290,8 +374,20 @@ onBeforeUnmount(() => {
   max-width: 100%;
   max-height: 60vh;
   object-fit: contain;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* 拖曳中不加過渡，否則圖會一路追在指標後面慢半拍 */
+.detail__viewport:not(.detail__viewport--dragging) .detail__image {
+  transition: transform 220ms var(--ease);
+}
+
+.detail__zoomhint {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
 }
 
 .detail__title {
