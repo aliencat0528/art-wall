@@ -38,8 +38,14 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 斷言具體數字等於把實作綁進測試，故不寫單元測試；**會壞掉的是「作品點不開」這一類行為**，
 由 E2E 既有的「點作品開詳情」把關（拖曳曾因 `setPointerCapture` 吃掉 click，就是這條抓到的）。
 
+**詳情頁 pan/zoom（MR-015）分兩層測**：夾制與錨點是純數學，`useImageZoom.spec.ts` 直接測
+匯出的純函式（jsdom 沒有版面，`offsetWidth` 一律 0，在單元層測 DOM 量測等於測假的）；
+手勢串起來的行為（雙擊放大、拖得動、拖曳不會誤關詳情、切件回到 fit）由 E2E 把關。
+**雙指縮放沒有自動化測試**——Playwright 專案只設 chromium 桌機、無觸控模擬，
+這條目前靠手動驗，是已知缺口。
+
 > **E2E 超時要先懷疑資源競爭**：光氛層有常駐動畫，若同時開著 dev server 與另一個
-> 開著本站的瀏覽器分頁，整套 18 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
+> 開著本站的瀏覽器分頁，整套 20 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
 > 先關掉再重跑，不要急著改測試。
 
 ## 測試流程報告（四段式）
@@ -49,7 +55,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 1. **環境準備 (Setup)**：`npm ci`；E2E 另需 `npx playwright install chromium`。
    本機 Node 18，CI Node 20。
 2. **執行步驟 (Execution)**：`npm run lint && npm run test && npm run build && npm run test:e2e`。
-3. **預期結果 (Expected)**：lint 零警告；單元 34 tests 全過；build 產出 `dist/`；E2E 14 tests 全過。
+3. **預期結果 (Expected)**：lint 零警告；單元 76 tests 全過；build 產出 `dist/`；E2E 20 tests 全過。
 4. **驗證方式 (Verification)**：`npm run coverage` 看 composables/utils 覆蓋率；
    E2E 失敗時看 `playwright-report/`（CI 會上傳成 artifact）。
 

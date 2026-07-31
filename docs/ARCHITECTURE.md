@@ -64,6 +64,7 @@ flowchart TD
 | `composables/useGallery.ts` | 依媒材/依展覽模式、篩選與詳情選取、網址同步 | 資料從哪來 |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
+| `composables/useImageZoom.ts` | 詳情頁的縮放與平移：上限換算（原圖像素 1:1）、錨點與邊界夾制、滑鼠／觸控手勢 | 圖從哪來、框多大（由 `WorkDetail` 的版面決定） |
 | `components/GalleryAtmosphere.vue` | 暗場光氛六層（主光暈／體積光／浮塵／霧氣／掃描光／暗角） | 作品本身的呈現 |
 | `composables/useSettings.ts` | 站台設定與分頁標題 | 作品資料 |
 | `utils/color.ts` | 由 accent 以 HSL 推導暗底 `accentDark`、疊印第二色版 `counterAccent`、對比度計算 | 顏色語意以外 |
@@ -131,6 +132,12 @@ flowchart TD
 | 網格（<900px） | 欄寬 | 圖框寬 100% → 由 `aspect-ratio` 推得高度 |
 
 兩種模式都不讓圖片的固有尺寸參與版面計算，這是「圖片不會撐破版面」的根本原因。
+
+**詳情頁是例外，也只有這一處**：`.detail__viewport` 貼著圖片的實際尺寸收縮
+（圖受 `max-height: 60vh` / 手機 46vh 約束），放大後溢出的部分裁在這個框內。
+放大上限＝原圖像素 1:1，由 `naturalWidth ÷ 顯示寬度` 算出——詳情用圖長邊 1800px
+（`utils/image.ts`），超過 1:1 只會放大 JPEG 的壓縮痕跡。手機未放大時
+框上是 `touch-action: pan-y`，單指仍然捲得動面板；放大後才改 `none` 由手勢接管。
 
 ## 技術棧
 
