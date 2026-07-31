@@ -1,9 +1,11 @@
 /**
  * 顏色工具：把使用者選的 accent 自動推導出暗底可用的 accentDark。
  *
- * 為什麼要推導（MR-008／MR-012 ③）：分類強調色在暗展廳底（`gallery-dark`，
- * `--bg: #17171a`）上，墨色系（如書法 #3d3a35）會整個消失。使用者只該選一個顏色，
- * 暗底版本由此自動算出——提亮到足夠亮度，並驗證對比度達標，達不到就繼續提亮。
+ * 為什麼要推導（MR-008／MR-012 ③）：分類強調色在暗場底（`--bg: #08080d`）上，
+ * 深色系會整個消失。使用者只該選一個顏色，暗底版本由此自動算出——
+ * 提亮到足夠亮度，並驗證對比度達標，達不到就繼續提亮。
+ *
+ * 另備 `counterAccent`：暗場疊印框要的第二個色版（MR-014）。
  */
 
 interface Rgb {
@@ -18,8 +20,8 @@ interface Hsl {
   l: number
 }
 
-/** 暗展廳背景色，推導對比度的基準 */
-const DARK_BG: Rgb = { r: 0x17, g: 0x17, b: 0x1a }
+/** 暗場背景色（`main.css` 的 `--bg`），推導對比度的基準 */
+const DARK_BG: Rgb = { r: 0x08, g: 0x08, b: 0x0d }
 /** WCAG AA 對一般文字的對比門檻；強調線條取同一標準求穩 */
 const MIN_CONTRAST = 4.5
 
@@ -103,6 +105,25 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
   const lighter = Math.max(la, lb)
   const darker = Math.min(la, lb)
   return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * 疊印框的第二個色版（MR-014）。
+ *
+ * 暗場的「疊印」與紙上的疊印不是同一件事：紙上是 multiply（墨愈疊愈暗），
+ * 暗場是 screen（光愈疊愈亮）。所以這裡做的是**色差錯位**——兩道色光往反方向偏移，
+ * 相交處加成出白光，等於沒對準的兩塊光版。
+ *
+ * 色相不取正補色（+180）：正補色在暗場會打架，偏 156 度既有色差又還算和諧。
+ * 飽和與亮度寫死而不沿用輸入值——第二版只是配角，跟著主色一起變濃會搶戲。
+ */
+export function counterAccent(accent: string): string {
+  const rgb = hexToRgb(accent)
+  // 解析不了就回中性亮灰：疊印框會退化成單純的白框，不會炸掉版面
+  if (!rgb) return '#d8d6e0'
+  const { h } = rgbToHsl(rgb)
+  const counter = ((h * 360 + 156) % 360) / 360
+  return rgbToHex(hslToRgb({ h: counter, s: 0.82, l: 0.62 }))
 }
 
 /**

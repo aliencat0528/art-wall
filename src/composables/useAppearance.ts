@@ -1,33 +1,36 @@
-import { watchEffect, type Ref } from 'vue'
-import type { BackgroundId, CategoryTheme, FilterId } from '@/types'
+import { computed, watchEffect, type Ref } from 'vue'
+import type { CategoryTheme, FilterId } from '@/types'
 import { ALL_THEME, categoryOf } from '@/data/categories'
-import { BACKGROUND_MAP, DEFAULT_BACKGROUND } from '@/data/backgrounds'
 import { useLibrary } from '@/composables/useLibrary'
+import { counterAccent } from '@/utils/color'
 
 /**
- * 把「整體背景」與「分類主題」兩層一起寫進 :root。
+ * 把分類主題寫進 :root。
  *
- * 兩層正交：背景管中性色（底、字、線），分類管強調色與個性（動效、邊緣、紋理）。
- * 唯一的交叉點是強調色——暗底要換用 accentDark，否則墨色系會整個消失。
+ * 原本這裡有兩層（整體背景 × 分類主題，MR-009）。MR-014 收成一層：
+ * 站台一律是暗場光氛，中性層 token 直接是 `styles/main.css` 的 :root 值，
+ * 沒有第二套配色要在執行期換。這支因此只剩「分類換口音」這件事：
+ *
+ *   - `--accent`：分類強調色，一律取 `accentDark`（底永遠是暗的）。同時是光氛的光色
+ *   - `--counter`：疊印框的第二個色版，由 accent 推導（見 `counterAccent`）
+ *   - `--texture` / `--ease` / `--card-radius` / `--card-border`：紋理與動效組
  */
-export function useAppearance(active: Ref<FilterId>, background: Ref<BackgroundId>): void {
+export function useAppearance(active: Ref<FilterId>): void {
   const { categories } = useLibrary()
+
+  const theme = computed<CategoryTheme>(() =>
+    active.value === 'all' ? ALL_THEME : categoryOf(active.value, categories.value).theme,
+  )
+
   watchEffect(() => {
     const root = document.documentElement.style
-    const scheme = BACKGROUND_MAP[background.value] ?? BACKGROUND_MAP[DEFAULT_BACKGROUND]
-    const theme: CategoryTheme =
-      active.value === 'all' ? ALL_THEME : categoryOf(active.value, categories.value).theme
 
-    for (const [token, value] of Object.entries(scheme.tokens)) {
-      root.setProperty(token, value)
-    }
-
-    root.setProperty('--accent', scheme.dark ? theme.accentDark : theme.accent)
-    root.setProperty('--texture', theme.texture)
-    root.setProperty('--ease', theme.easing)
-    root.setProperty('--card-radius', theme.radius)
-    root.setProperty('--card-border', theme.border)
-    // 紋理是黑線，暗底要反相成微亮的線才看得見（實作在 main.css 的 body::before）
-    document.documentElement.dataset.scheme = scheme.dark ? 'dark' : 'light'
+    // 暗場的光色必須有彩，故一律用 accentDark；六類的值為手工調校（見 categories.ts）
+    root.setProperty('--accent', theme.value.accentDark)
+    root.setProperty('--counter', counterAccent(theme.value.accentDark))
+    root.setProperty('--texture', theme.value.texture)
+    root.setProperty('--ease', theme.value.easing)
+    root.setProperty('--card-radius', theme.value.radius)
+    root.setProperty('--card-border', theme.value.border)
   })
 }

@@ -19,7 +19,7 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
 
 | 層 | 工具 | 測什麼 | 檔案 |
 |----|------|--------|------|
-| 單元 | Vitest + jsdom | composables 與 utils 的**邏輯**：資料合併、CRUD、篩選、網址狀態、IndexedDB wrapper | `src/**/*.spec.ts` |
+| 單元 | Vitest + jsdom | composables 與 utils 的**邏輯**：資料合併、CRUD、篩選、網址狀態、IndexedDB wrapper、暗場配色（`accentDark` 對比度、`counterAccent` 色差、六類 accent 必須有彩） | `src/**/*.spec.ts` |
 | E2E | Playwright（chromium） | 真實瀏覽器的**流程與持久化**：分類切換、詳情開關、深連結、上傳→reload→圖片還在 | `e2e/*.spec.js` |
 
 **為什麼有些東西只在 E2E 測**：
@@ -30,9 +30,17 @@ E2E 首次執行前要裝瀏覽器：`npx playwright install chromium`。
   不認得 jsdom 的 Blob（存進去讀回來變空物件）。所以 `idb.spec.ts` 只用 `Uint8Array`
   驗 wrapper 的 key/覆寫/刪除邏輯，真正的 Blob 往返交給 E2E 的「reload 後圖片還在」。
 
-**單元測試目前不涵蓋**（有意）：`useAppearance` / `useMediaQuery` / `useSettings`
-偏 DOM 與媒體查詢，行為由 E2E 的整頁流程間接覆蓋；`useLibrary.replaceImage`（換圖）
-尚無專測，是已知缺口。
+**單元測試目前不涵蓋**（有意）：`useAppearance` / `useMediaQuery` / `useSettings` /
+`usePointerParallax` 偏 DOM 與媒體查詢，行為由 E2E 的整頁流程間接覆蓋；
+`useLibrary.replaceImage`（換圖）尚無專測，是已知缺口。
+
+**長廊景深與互動（MR-014）的驗證方式**：`--focus`／偏轉／光池強弱是視覺量值，
+斷言具體數字等於把實作綁進測試，故不寫單元測試；**會壞掉的是「作品點不開」這一類行為**，
+由 E2E 既有的「點作品開詳情」把關（拖曳曾因 `setPointerCapture` 吃掉 click，就是這條抓到的）。
+
+> **E2E 超時要先懷疑資源競爭**：光氛層有常駐動畫，若同時開著 dev server 與另一個
+> 開著本站的瀏覽器分頁，整套 18 個測試會從約 13 秒拖到 1 分鐘以上並隨機超時。
+> 先關掉再重跑，不要急著改測試。
 
 ## 測試流程報告（四段式）
 

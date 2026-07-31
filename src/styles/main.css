@@ -3,8 +3,12 @@
  *
  * 分兩層（MR-008）：
  *   1. 中性層——背景、字色、線條、間距。永遠不隨分類改變，作品顏色不被外殼干擾。
- *   2. 分類層——`--accent` / `--ease` / `--card-radius` / `--card-border` / `--texture`，
- *      由 `useCategoryTheme` 在切換分類時覆寫。初始值等同「全部」的中性主題。
+ *   2. 分類層——`--accent` / `--counter` / `--ease` / `--card-radius` / `--card-border` /
+ *      `--texture`，由 `useAppearance` 在切換分類時覆寫。
+ *
+ * 中性層在 MR-014 收成**單一暗場光氛**：原本的四種整體背景（MR-009）已移除，
+ * 底色不再是執行期可換的狀態，直接寫死在這裡當唯一真相。
+ * 分類層的初始值＝「全部」的暗底版，等 `useAppearance` 接手後才逐分類覆寫。
  */
 
 *,
@@ -16,14 +20,14 @@
 }
 
 :root {
-  /* 中性層 */
-  --bg: #f7f6f3;
-  --surface: #eceae5;
-  --ink: #1c1c1a;
-  --ink-soft: #55534d;
-  --ink-faint: #8c8981;
-  --line: #dedbd4;
-  --line-strong: #c8c4bb;
+  /* 中性層：暗場光氛，唯一一套 */
+  --bg: #08080d;
+  --surface: #12121a;
+  --ink: #ece9f2;
+  --ink-soft: #a9a6b4;
+  --ink-faint: #75727f;
+  --line: #1e1e28;
+  --line-strong: #33333f;
 
   /* 版面尺度 */
   --page-x: clamp(1rem, 5vw, 4rem);
@@ -34,8 +38,10 @@
   --font-sans: 'Noto Sans TC', 'PingFang TC', 'Hiragino Sans', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-  /* 分類層預設值（＝ ALL_THEME，見 data/categories.ts） */
-  --accent: #1c1c1a;
+  /* 分類層初始值（＝ ALL_THEME 的暗底版，見 data/categories.ts） */
+  --accent: #4fd6e8;
+  /* 疊印框的第二色版，由 accent 推導（見 utils/color.ts 的 counterAccent） */
+  --counter: #ee4f7c;
   --texture: none;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --card-radius: 2px;
@@ -61,18 +67,16 @@ body {
   transition: background-color 400ms var(--ease);
 }
 
-/* 紋理鋪在獨立的一層：暗色背景時整層反相，黑線才不會消失在暗底裡 */
+/* 紋理鋪在獨立的一層。紋理本身是黑線（見 categories.ts），整層反相成微亮的線
+   才看得見——底永遠是暗的，不再有明場那一支要分開處理 */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background-image: var(--texture);
-  pointer-events: none;
-}
-
-:root[data-scheme='dark'] body::before {
   filter: invert(1);
+  pointer-events: none;
 }
 
 #app {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import EditorPanel from '@/components/EditorPanel.vue'
+import GalleryAtmosphere from '@/components/GalleryAtmosphere.vue'
 import IntroSequence from '@/components/IntroSequence.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import WorkDetail from '@/components/WorkDetail.vue'
@@ -9,6 +10,7 @@ import { useAppearance } from '@/composables/useAppearance'
 import { useGallery } from '@/composables/useGallery'
 import { useLibrary } from '@/composables/useLibrary'
 import { usePrefersReducedMotion } from '@/composables/useMediaQuery'
+import { usePointerParallax } from '@/composables/usePointerParallax'
 import { useSettings } from '@/composables/useSettings'
 
 const {
@@ -33,10 +35,8 @@ const {
 const { settings } = useSettings()
 const { init } = useLibrary()
 
-useAppearance(
-  activeCategory,
-  computed(() => settings.value.background),
-)
+useAppearance(activeCategory)
+usePointerParallax()
 
 const reducedMotion = usePrefersReducedMotion()
 const editorOpen = ref(false)
@@ -67,6 +67,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app">
+    <GalleryAtmosphere :view-key="railKey" />
+
     <SiteHeader
       :categories="categories"
       :active="activeCategory"
@@ -97,7 +99,7 @@ onBeforeUnmount(() => {
 
     <footer class="app__footer">
       <p class="app__hint">
-        滾動瀏覽長廊 · 點擊作品看細節
+        拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節
       </p>
       <div class="app__footer-right">
         <button

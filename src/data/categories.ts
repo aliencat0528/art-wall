@@ -108,19 +108,34 @@ function theme(presetId: TexturePresetId, accent: string, accentDark: string): C
   return { accent, accentDark, texture: preset.texture, easing: preset.easing, radius: preset.radius, border: preset.border }
 }
 
+/**
+ * 書法／立體改用材料自身的顏色（MR-014）。
+ *
+ * 原值 `書法 #3d3a35`（墨）與 `立體 #6b6355`（石膏灰）幾乎無彩，在暗場光氛下
+ * 「光」根本發不出來——F 的機制（聚光、光池、疊印框）全部建立在有彩 accent 上，
+ * 無彩會退化成一團灰霧。改取印泥朱紅與陶土赭：仍是這兩種創作的材料色，
+ * 不是外加的裝飾色，故未違反 MR-008「殼只給口音」的原則。
+ */
 export const CATEGORIES: Category[] = [
   { id: 'acrylic', label: '壓克力畫', code: 'ACR', theme: theme('linen', '#c2410c', '#ff8a4c') },
   { id: 'watercolor', label: '水彩畫', code: 'WTC', theme: theme('paper', '#2563a8', '#6ea8e8') },
-  { id: 'calligraphy', label: '書法', code: 'CAL', theme: theme('xuan', '#3d3a35', '#d8d2c6') },
-  { id: 'sculpture', label: '立體作品', code: 'SCP', theme: theme('stone', '#6b6355', '#c4b8a2') },
+  { id: 'calligraphy', label: '書法', code: 'CAL', theme: theme('xuan', '#b7332a', '#e0685c') },
+  { id: 'sculpture', label: '立體作品', code: 'SCP', theme: theme('stone', '#a9713d', '#d99a5e') },
   { id: 'animation', label: '動畫', code: 'ANM', theme: theme('frame', '#7c3aed', '#b18aff') },
   { id: 'newmedia', label: '新媒體', code: 'NEW', theme: theme('grid', '#0d8a80', '#3fd6c8') },
 ]
 
-/** 「全部」不是分類，是篩選狀態，故用中性主題且無紋理 */
+/**
+ * 「全部」不是分類，是篩選狀態，故用中性主題且無紋理。
+ *
+ * 例外是 `accentDark`（MR-014）：整站底色改為暗場後，近白的 `#f0efec` 當光色
+ * 會把整個展場照成無彩的白霧，看不出光有顏色。改用展廳青當「未選分類」的光色。
+ * `accent`（明場用的無彩近黑）留著不刪：`resolveCategory`／編輯面板仍以它為使用者
+ * 選的顏色，暗底版一律由它推導。
+ */
 export const ALL_THEME: CategoryTheme = {
   accent: '#1c1c1a',
-  accentDark: '#f0efec',
+  accentDark: '#4fd6e8',
   texture: 'none',
   easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
   radius: '2px',
