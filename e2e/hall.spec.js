@@ -226,6 +226,75 @@ test('窄螢幕走動後不跑版、仍點得開作品', async ({ page }) => {
 })
 
 /**
+ * 手機上「走不動」的兩個成因，各守一條。
+ *
+ * 這個模式在手機沒有方向鍵，HUD 那三顆鈕是唯一的按鈕操作；而實測它們只有
+ * 28～82 寬、29～30 高，全都不到可觸控目標的下限，按空的機率高到會被讀成
+ * 「按鈕失效」。補到 44 之後這條就是防它再被改小。
+ */
+test('窄螢幕的走廊按鈕都達到 44px 觸控下限', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('./?intro=0&v=hall')
+  await expect(page.locator('.hall')).toBeVisible()
+
+  const boxes = await page.locator('.hall__step').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect()
+      return { text: el.textContent.trim(), w: r.width, h: r.height }
+    }),
+  )
+  expect(boxes.length).toBe(3)
+  for (const box of boxes) {
+    expect(box.w, `${box.text} 的寬`).toBeGreaterThanOrEqual(44)
+    expect(box.h, `${box.text} 的高`).toBeGreaterThanOrEqual(44)
+  }
+})
+
+/**
+ * 另一半：手機的主要操作是滑動，不是那三顆鈕。
+ *
+ * `hasTouch` 一定要開——Chromium 沒開觸控時根本不提供 `TouchEvent`／`Touch`
+ * 這兩個建構子，測試會在 dispatch 之前就炸掉，而不是測到行為。
+ */
+test.describe('觸控', () => {
+  test.use({ hasTouch: true })
+
+  test('窄螢幕橫向滑動可以走廊前進與後退', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('./?intro=0&v=hall')
+    await expect(page.locator('.hall')).toBeVisible()
+
+    // 往左滑＝往前走。距離要超過 SWIPE_MIN(60)，否則會被當成點擊時的手抖
+    const swipe = ([x1, y1], [x2, y2]) =>
+      page.locator('.hall').evaluate(
+        (el, points) => {
+          const top = el.getBoundingClientRect().top
+          const touch = (x, y) =>
+            new Touch({ identifier: 1, target: el, clientX: x, clientY: top + y })
+          const send = (type, x, y) =>
+            el.dispatchEvent(new TouchEvent(type, { bubbles: true, changedTouches: [touch(x, y)] }))
+          send('touchstart', points[0][0], points[0][1])
+          send('touchend', points[1][0], points[1][1])
+        },
+        [
+          [x1, y1],
+          [x2, y2],
+        ],
+      )
+
+    await swipe([300, 200], [120, 200])
+    await expect(page.locator('.hall__pos')).toContainText('第 2 /')
+
+    await swipe([120, 200], [300, 200])
+    await expect(page.locator('.hall__pos')).toContainText('第 1 /')
+
+    // 縱向為主的滑動是在捲頁面，不該被誤判成走路
+    await swipe([200, 60], [120, 260])
+    await expect(page.locator('.hall__pos')).toContainText('第 1 /')
+  })
+})
+
+/**
  * 疊印霓虹框（MR-019）：走廊沿用牆面那一套雙色光框。
  *
  * 測「錯位有沒有保留」而不是「光多亮」——兩道有色邊一旦對齊就重疊成一條白線，

@@ -25,6 +25,37 @@ const skipButton = ref<HTMLButtonElement | null>(null)
 let autoTimer: number | undefined
 let leaveTimer: number | undefined
 
+/**
+ * 消散的光點：沿門縫（主對角線）灑一排，離場時往垂直於門縫的方向散開。
+ *
+ * **每顆的 `delay + dur` 必須 ≤ `LEAVE`**。這是本專案已經踩過兩次的同一個坑
+ * （走廊行進光帶、抵達脈衝）：整層在 `LEAVE` 之後就被卸載，動畫沒播完就
+ * 連元素一起消失——讀起來是「粒子憑空不見」，不是「散掉」。
+ * 現值最慢的一顆是 90 + 800 = 890ms，貼著 900 但不會被切到。
+ */
+const MOTE_COUNT = 24
+
+const motes = Array.from({ length: MOTE_COUNT }, (_, index) => {
+  // 沿對角線的位置，加一點抖動——等距排列會讀成一條虛線而不是灑出來的光。
+  // 夾在 0～100：抖動會讓頭尾兩顆掉到畫面外（實測 -0.34vw），白灑一顆
+  const jitter = (index + 0.5) / MOTE_COUNT + (Math.random() - 0.5) * 0.05
+  const along = Math.min(Math.max(jitter, 0), 1) * 100
+  // 兩側交替：一側跟著 A 門的方向 (1,-1)，另一側跟著 B 門 (-1,1)，顏色也分兩色。
+  // 這樣粒子散開的方向跟門讓開的方向是同一組，看起來是被門「推出去」的
+  const side = index % 2 === 0 ? 1 : -1
+  const spread = 16 + Math.random() * 40
+  return {
+    x: `${along.toFixed(2)}vw`,
+    y: `${along.toFixed(2)}vh`,
+    dx: `${(side * spread).toFixed(2)}vw`,
+    dy: `${(-side * spread).toFixed(2)}vh`,
+    size: `${(2 + Math.random() * 5).toFixed(1)}px`,
+    delay: `${Math.round(Math.random() * 90)}ms`,
+    dur: `${Math.round(540 + Math.random() * 260)}ms`,
+    tint: side > 0 ? 'var(--accent)' : 'var(--counter)',
+  }
+})
+
 function finish() {
   if (leaving.value) return
   leaving.value = true
@@ -79,6 +110,37 @@ onBeforeUnmount(() => {
       aria-hidden="true"
     />
 
+    <!--
+      門縫的兩道色光。**排在門之後**才會疊在門上（同樣靠 DOM 順序，不用 z-index）。
+      兩道往相反方向退開＝同一道白光分成兩色，這就是「光分」；
+      顏色沿用全站的 accent／counter 兩色套印語彙，不另開一組色。
+    -->
+    <span
+      class="seam seam--a"
+      aria-hidden="true"
+    />
+    <span
+      class="seam seam--b"
+      aria-hidden="true"
+    />
+
+    <span
+      v-for="(mote, index) in motes"
+      :key="`mote-${index}`"
+      class="mote"
+      aria-hidden="true"
+      :style="{
+        '--mote-x': mote.x,
+        '--mote-y': mote.y,
+        '--mote-dx': mote.dx,
+        '--mote-dy': mote.dy,
+        '--mote-s': mote.size,
+        '--mote-delay': mote.delay,
+        '--mote-dur': mote.dur,
+        '--mote-tint': mote.tint,
+      }"
+    />
+
     <div
       class="intro__stage"
       aria-hidden="true"
@@ -115,6 +177,20 @@ onBeforeUnmount(() => {
 .intro {
   position: fixed;
   inset: 0;
+  /**
+   * ⚠️ **`dvh` 不是可有可無的美化**——沒有它，跳過鈕在 iPhone 上按不到。
+   *
+   * iOS Safari 的 fixed 容器吃的是 **large viewport**（工具列收起時的高度），
+   * 但畫面上實際看得到的是 small viewport。iPhone 12 實測差 126px，
+   * 而跳過鈕貼在容器下緣往上 16px——算下來鈕的底邊落在可見區**下方 110px**，
+   * 整顆藏在 Safari 的工具列底下。使用者按到的是瀏覽器，不是這顆鈕，
+   * 於是「跳過開場沒有反應」。桌機一路都正常，所以先前查不出來。
+   *
+   * `100dvh` 取的是**當下真的看得到**的高度。`100vh` 那行留著給不支援 dvh 的舊瀏覽器。
+   * 這一層跟 `App.vue`／`main.css` 的 `min-height` 是同一個病，要一起改。
+   */
+  height: 100vh;
+  height: 100dvh;
   z-index: 100;
   display: grid;
   place-items: center;
@@ -146,12 +222,141 @@ onBeforeUnmount(() => {
   will-change: transform;
 }
 
+/**
+ * 兩片門各帶一色，不再是兩片一樣的黑。
+ *
+ * 疊層順序是「色光在上、`var(--bg)` 在下」：底那層必須留著且不透明，
+ * 門是遮住作品牆的簾子，透了就在開場就先劇透整面牆。
+ *
+ * 漸層方向用 `to top right`：CSS 對這個關鍵字的定義會讓等色線平行於
+ * **左上→右下**那條對角線，也就是門縫本身。所以光是沿著縫發亮的，
+ * 不是隨便打一片顏色——縫在哪，色就在哪。
+ */
 .door--a {
   clip-path: polygon(0 0, 100% 0, 100% 100%);
+  background:
+    linear-gradient(
+      to top right,
+      color-mix(in srgb, var(--accent) 20%, transparent) 42%,
+      transparent 64%
+    ),
+    var(--bg);
 }
 
 .door--b {
   clip-path: polygon(0 0, 100% 100%, 0 100%);
+  background:
+    linear-gradient(
+      to bottom left,
+      color-mix(in srgb, var(--counter) 18%, transparent) 42%,
+      transparent 64%
+    ),
+    var(--bg);
+}
+
+/**
+ * ── 光分 ───────────────────────────────────────────────
+ *
+ * 兩道貼著門縫的細光帶，離場時往**兩片門各自的方向**退開。
+ * 一道白光被稜鏡分成兩色、兩色再分開——這是整段離場的主視覺，
+ * 門讓開只是它的載體。
+ *
+ * `screen` 而不是實心色：暗場裡光是加成的，實心色會變成兩條貼紙。
+ * 820ms < LEAVE(900)，同上：不能被卸載切掉。
+ */
+.seam {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.seam--a {
+  --seam-dx: 15vw;
+  --seam-dy: -15vh;
+
+  background: linear-gradient(
+    to top right,
+    transparent 46%,
+    color-mix(in srgb, var(--accent) 78%, transparent) 50%,
+    transparent 54%
+  );
+}
+
+.seam--b {
+  --seam-dx: -15vw;
+  --seam-dy: 15vh;
+
+  background: linear-gradient(
+    to top right,
+    transparent 46%,
+    color-mix(in srgb, var(--counter) 72%, transparent) 50%,
+    transparent 54%
+  );
+}
+
+.intro.is-leaving .seam {
+  animation: seam-split 820ms cubic-bezier(0.7, 0, 0.3, 1) forwards;
+}
+
+@keyframes seam-split {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--seam-dx), var(--seam-dy));
+  }
+}
+
+/**
+ * ── 粒子消散 ────────────────────────────────────────────
+ *
+ * 位置與散開方向都由 JS 灑好寫進自訂屬性（見 script 的 `motes`），
+ * 這裡只負責怎麼動。`margin` 收半個尺寸是把 `--mote-x/y` 當成**中心點**用，
+ * 不然小顆與大顆會各自對齊左上角、排不到同一條縫上。
+ */
+.mote {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--mote-s);
+  height: var(--mote-s);
+  margin: calc(var(--mote-s) / -2);
+  border-radius: 50%;
+  background: var(--mote-tint);
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.intro.is-leaving .mote {
+  animation: mote-scatter var(--mote-dur) cubic-bezier(0.2, 0.6, 0.3, 1)
+    var(--mote-delay) forwards;
+}
+
+@keyframes mote-scatter {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--mote-x), var(--mote-y), 0) scale(0.3);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(
+        calc(var(--mote-x) + var(--mote-dx)),
+        calc(var(--mote-y) + var(--mote-dy)),
+        0
+      )
+      scale(1);
+  }
 }
 
 .intro.is-leaving .door--a {
@@ -263,10 +468,19 @@ onBeforeUnmount(() => {
   }
 }
 
+/**
+ * `screen`，不是 `multiply`。
+ *
+ * **`multiply` 是 bug，不是風格**：那是 v1 白底時期留下來的，MR-014 把站台整個
+ * 翻成暗場之後沒有跟著改。近白的 `--ink` 乘上近黑的門色＝黑，於是整組
+ * 「ART WALL／作品牆」在暗底上是黑字黑底，**從 MR-014 起就沒有真的顯示過**
+ * （截圖裡只剩一點抗鋸齒的灰邊，所以一直沒被當成缺字回報）。
+ * 暗場要的是加成：`screen` 讓白字浮在門上，這才是原本想要的效果。
+ */
 .intro__title {
   position: relative;
   text-align: center;
-  mix-blend-mode: multiply;
+  mix-blend-mode: screen;
 }
 
 .intro__code {
@@ -285,6 +499,11 @@ onBeforeUnmount(() => {
   letter-spacing: 0.5em;
   text-indent: 0.5em;
   color: var(--ink);
+  /* 字自己也分一次色：兩色往左右各偏一點點，跟門縫那道光同一個語彙。
+     偏移量只有 0.04em——再大就從「色差」變成「疊字」，字先讀不清楚 */
+  text-shadow:
+    -0.04em 0 color-mix(in srgb, var(--counter) 55%, transparent),
+    0.04em 0 color-mix(in srgb, var(--accent) 55%, transparent);
   opacity: 0;
   animation: title-in 900ms cubic-bezier(0.16, 1, 0.3, 1) 1950ms forwards;
 }
@@ -307,6 +526,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
+  /* 44px 是可觸控目標的下限（Apple HIG／WCAG 2.5.5）。原本只有 40 高，
+     配上「整層都可以點掉」還算勉強，但這顆是唯一有明示的出口，不該讓人按空 */
+  min-height: 44px;
   padding: 0.55rem 0.9rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
