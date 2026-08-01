@@ -1,6 +1,6 @@
 給任意創作者用的線上作品牆：資料驅動、分類可編輯、可策展成展覽，並可在瀏覽器內編輯與上傳。
 
-![Version](https://img.shields.io/badge/version-2.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 # Art Wall - 作品牆
@@ -113,6 +113,15 @@ npm run test:e2e # E2E（Playwright，僅 chromium）
 - **測試**：Vitest + jsdom（單元）、Playwright（E2E）
 
 ## 版本歷史
+
+### v2.9.0 (2026-08-01)
+
+- **修正手機上「按鈕沒反應」** — iOS Safari 的 `100vh` 是工具列收起後的高度，不是當下看得到的高度；走廊的 WALK ON／BACK／START 與開場的跳過鈕因此整個落在畫面外，按到的是瀏覽器工具列。版面高度全面改吃 `dvh`（MR-020）
+- **走廊可以用滑的** — 手機沒有方向鍵，橫向滑一下就走一步；HUD 三顆按鈕也補到 44px 觸控下限
+- **開場改成兩色光分與粒子消散** — 兩片門各帶一色，離場時沿門縫裂出兩道互補色光往反方向退開，縫上的光點跟著散掉
+- **修正開場標題看不到** — `mix-blend-mode: multiply` 是白底時期留下的，站台翻成暗場後等於黑字黑底，「ART WALL／作品牆」一直沒有真的顯示過；改用 `screen` 並加上兩色字緣
+- **修正刪掉展覽後走進死路** — 刪掉正在看的展覽會停在空畫面，而切回「依媒材」的按鈕在展覽歸零時也一起消失，連網址重整都回不去；現在會自動接到下一個展覽，沒有展覽就退回依媒材
+- **修正展覽分享連結過不了重新整理** — 網址上的展覽 id 先前在資料庫載完前就被判成無效而清掉
 
 ### v2.8.0 (2026-08-01)
 

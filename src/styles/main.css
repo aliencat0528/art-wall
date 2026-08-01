@@ -32,7 +32,16 @@
   /* 版面尺度 */
   --page-x: clamp(1rem, 5vw, 4rem);
   --wall-gap: clamp(1rem, 2.2vw, 2rem);
-  --rail-h: clamp(360px, 62vh, 620px);
+  /**
+   * 同樣走 dvh：長廊帶狀區用 62vh 在 iOS 上會依「工具列收起後」的高度算，
+   * 比實際看得到的高度多算一截，底下的頁尾就被推出畫面。
+   *
+   * 這裡**不寫 `62vh` 的退路**——自訂屬性的舊瀏覽器退路要靠重複宣告，
+   * 但自訂屬性照單全收任何 token，舊瀏覽器會存下 `62dvh` 再在代入時整條失效，
+   * 反而比沒有退路更糟。而且本專案已經大量用 `color-mix`（Safari 16.2），
+   * 支援度比 `dvh`（Safari 15.4）還晚——過得了 color-mix 就一定過得了 dvh。
+   */
+  --rail-h: clamp(360px, 62dvh, 620px);
 
   /* 字體：系統字，不打外部請求 */
   --font-sans: 'Noto Sans TC', 'PingFang TC', 'Hiragino Sans', system-ui, -apple-system, sans-serif;
@@ -102,8 +111,11 @@ body::after {
   pointer-events: none;
 }
 
+/* dvh 的理由寫在 App.vue 的 `.app`（iOS 的 100vh 是 large viewport，
+   會把版面底部的按鈕推到工具列底下）。這兩層要一起縮，不然外層仍撐著 100vh */
 #app {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 img {

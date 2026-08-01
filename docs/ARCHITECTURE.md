@@ -64,7 +64,7 @@ flowchart TD
 | `data/categories.ts` | 內建六類 + 紋理預設 `TEXTURE_PRESETS`；`categoryOf`（分類讀取唯一收口，孤兒回中性 fallback）、`resolveCategory`（自訂分類算完整 theme） | 中性層 token（寫死在 `styles/main.css`） |
 | `composables/useLibrary.ts` | 作品／分類／展覽的合併與 CRUD、單一 document 持久化與 v1→v2 遷移、匯出匯入 | 篩選與選取 |
 | `composables/useGallery.ts` | 依媒材/依展覽模式、**版面（牆面／走廊）**、篩選與詳情選取、網址同步 | 資料從哪來 |
-| `components/GalleryHall.vue` | 走廊模式的房間（四個面）、相機推進、光波地板、近景換大圖 | 幾何算式（在 `utils/hall.ts`）、誰能進走廊（由 `App.vue` 判定） |
+| `components/GalleryHall.vue` | 走廊模式的房間（四個面）、相機推進、光波地板、近景換大圖、方向鍵與橫向滑動 | 幾何算式（在 `utils/hall.ts`）、誰能進走廊（由 `App.vue` 判定） |
 | `utils/hall.ts` | 走廊的純幾何：步數夾制、相機位置、作品掛在哪面牆與多深、近景／可見窗口判定 | DOM 與樣式、房間尺寸（純 CSS 常數） |
 | `composables/useAppearance.ts` | 分類主題（含光色 `--accent`／疊印色 `--counter`）寫進 `:root` | 決定用哪個主題 |
 | `composables/usePointerParallax.ts` | 游標位置正規化成 `--mx` / `--my` 寫進 `:root` | 誰要吃這兩個值 |
@@ -93,7 +93,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  K["方向鍵 / BACK / WALK ON"] --> W["walk(delta)"]
+  K["方向鍵 / BACK / WALK ON<br/>橫向滑動（手機主要操作）"] --> W["walk(delta)"]
   W --> CS["clampStep()<br/>夾在 0 ~ total-1"]
   CS -->|沒變| X["直接 return<br/>不重播動畫"]
   CS -->|變了| ST["step 更新"]
@@ -108,6 +108,12 @@ flowchart LR
 **三條分工**：相機位移與房間抵銷都是 CSS transition（合成層，不寫 rAF 迴圈）；
 地板流速只在走動的 820ms 內加快，是「我在移動」的回饋；
 可見窗口與圖源切換是純函式（`utils/hall.ts`），可單元測試。
+
+**手機的主要操作是橫向滑動，不是 HUD 那三顆鈕**（MR-020）。手機沒有方向鍵，
+而三顆鈕在窄螢幕先前只有 28～82 寬、29～30 高，全都不到 44px 觸控下限。
+滑動用 `touchstart`／`touchend`，**絕不碰 `setPointerCapture`**——指標捕獲會把後續
+`click` 改派給容器，作品就全部點不開（MR-014 踩過）。門檻 60px 且要求橫移大於縱移，
+否則點擊時的手抖會變成「想點作品卻走了一步」，直向捲頁也會被誤判成走路。
 
 ### 寫入（上傳）
 
@@ -170,9 +176,23 @@ Risograph 的四個機制，全部落在**作品以外**——這是「要印刷
 |------|---------|------|
 | 長廊（≥900px） | 軌道高度 | 卡片高 → 圖框高 → 由 `aspect-ratio` 反推圖框寬 → 卡片寬。說明文字絕對定位，不參與寬度計算 |
 | 網格（<900px） | 欄寬 | 圖框寬 100% → 由 `aspect-ratio` 推得高度 |
-| 走廊（選配，全尺寸） | 同樣吃 `--rail-h` | 房間的四個面與作品全部在 3D 場景內，`transform` 不改 layout box，故不參與版面計算。窄螢幕只收窄走廊半寬與作品寬，**幾何與相機不變** |
+| 走廊（選配，全尺寸） | `.app__main` 的剩餘空間（`flex: 1`） | 不吃 `--rail-h`——那是為「一排卡片＋上下留白」設計的帶狀區，走廊用它會在上下各留一段空白，地板接不到頁尾。房間的四個面與作品全部在 3D 場景內，`transform` 不改 layout box，故不參與版面計算。窄螢幕只收窄走廊半寬與作品寬，**幾何與相機不變** |
 
 三種模式都不讓圖片的固有尺寸參與版面計算，這是「圖片不會撐破版面」的根本原因。
+
+**視窗高度一律用 `dvh`，不用 `vh`**（`#app`、`.app`、`--rail-h`、`.intro`；MR-020）。
+
+iOS Safari 的 `100vh` ＝ **large viewport**（工具列收起後的高度），不是當下看得到的高度。
+差額實測 126px（iPhone 12：版面 790／可見 664）。走廊模式沒有可捲的內容、整頁就是一屏，
+於是**站在版面底部的東西會整個落在可見區外**——走廊 HUD 落在 668～721、開場的跳過鈕
+底邊在可見區下方 110px，按下去按到的是 Safari 的工具列。症狀讀起來就是「按鈕失效」。
+
+⚠️ **這個 bug 在桌機與 Chromium 的行動模擬都重現不了**（兩者只有一個視窗高度，
+`dvh` 恆等於 `vh`）。要驗證就**把版面容器設成 790、拿 664 當可見底線去量元素座標**。
+
+`--rail-h` 是自訂屬性，**不寫 `62vh` 的退路**：自訂屬性照單全收任何 token，
+舊瀏覽器會存下 `62dvh` 再在代入時整條失效，比沒有退路更糟。本專案早就大量用
+`color-mix`（Safari 16.2），支援度比 `dvh`（Safari 15.4）還晚，過得了前者就過得了後者。
 
 **走廊的垂直尺度是一組必須對齊的常數**（`GalleryHall.vue` 的 `--ceil` / `--ground`）：
 天花板、兩道牆、地板共用同一條天際線與地平線，改一個就要改全部，否則牆會穿到

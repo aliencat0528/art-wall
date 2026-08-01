@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
       <p class="app__hint">
         {{
           showHall
-            ? '方向鍵或下方按鈕往前走 · 點擊作品看細節'
+            ? '方向鍵、橫向滑動或下方按鈕往前走 · 點擊作品看細節'
             : '拖曳或滾動走過長廊 · 方向鍵逐件停留 · 點擊作品看細節'
         }}
       </p>
@@ -180,10 +180,25 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/**
+ * ⚠️ **`dvh` 是 WALK ON 在手機上按不到的解**（同一個病也發生在開場的跳過鈕）。
+ *
+ * iOS Safari 的 `100vh` ＝ **large viewport**（工具列收起後的高度），
+ * 不是當下看得到的高度。iPhone 12 實測：版面被排成 790 高，可見區只有 664。
+ * 走廊模式沒有可捲的內容，整頁就是一屏——於是站在版面底部的走廊 HUD
+ * （⇤ START／← BACK／WALK ON →）落在 668～721，**整條在可見區外**，
+ * 被 Safari 工具列蓋掉。使用者按下去等於按在瀏覽器上，讀起來就是「按鈕失效」。
+ *
+ * `100dvh` 取當下實際可見的高度，HUD 就回到畫面內。上面那行 `100vh` 是舊瀏覽器的
+ * 退路，順序不能顛倒（後宣告的才會覆蓋）。
+ * `main.css` 的 `#app` 與 `--rail-h`、`IntroSequence` 的 `.intro` 是同一組，
+ * 改一處就要一起改，不然只有部分版面跟著縮。
+ */
 .app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /**

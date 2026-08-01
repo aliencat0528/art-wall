@@ -147,6 +147,42 @@ function onKeydown(event: KeyboardEvent): void {
   event.preventDefault()
 }
 
+/**
+ * 滑動走廊（手機唯一的主要操作方式）。
+ *
+ * 手機沒有方向鍵，先前「往前走」只剩 HUD 那三顆鈕，而它們實測只有 28～82 寬、
+ * 29～30 高——**在手機上這個模式幾乎是不能操作的**。橫向滑一下就走一步，
+ * 才是這個尺寸下該有的主要操作。
+ *
+ * 用 `touchstart`／`touchend` 而不是 pointer 事件，且**絕不碰 `setPointerCapture`**：
+ * MR-014 已經記過，指標捕獲會把後續 click 改派給容器，作品全部點不開。
+ * 這裡只讀座標、不攔事件，`.piece` 的 click 一路照常。
+ *
+ * `SWIPE_MIN` 60px：低於這個距離的橫移多半是點擊時手指的抖動，
+ * 當成滑動會讓「想點作品卻走了一步」。同時要求橫移大於縱移，
+ * 直向捲動頁面時才不會被誤判成走路。
+ */
+const SWIPE_MIN = 60
+let touchX = 0
+let touchY = 0
+
+function onTouchStart(event: TouchEvent): void {
+  const touch = event.changedTouches[0]
+  if (!touch) return
+  touchX = touch.clientX
+  touchY = touch.clientY
+}
+
+function onTouchEnd(event: TouchEvent): void {
+  const touch = event.changedTouches[0]
+  if (!touch) return
+  const dx = touch.clientX - touchX
+  const dy = touch.clientY - touchY
+  if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) <= Math.abs(dy)) return
+  // 往左滑＝往前走。與捲動長廊的方向一致：內容往左跑，人往前進
+  walk(dx < 0 ? 1 : -1)
+}
+
 /** 換分類或展覽時走回入口——留在第 12 件而清單只剩 3 件會直接走出牆外 */
 watch(
   () => props.viewKey,
@@ -179,6 +215,8 @@ onBeforeUnmount(() => {
     tabindex="0"
     aria-label="走進展場"
     :style="{ '--cam': `${camera}px` }"
+    @touchstart.passive="onTouchStart"
+    @touchend.passive="onTouchEnd"
   >
     <p
       v-if="total === 0"
@@ -1188,15 +1226,25 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  /**
+   * 觸控目標補到 44×44（Apple HIG／WCAG 2.5.5 的下限）。
+   *
+   * 先前實測值：START 28×30、BACK 61×29、WALK ON 82×29——**每一顆都不到下限**，
+   * 而手機上沒有方向鍵，這三顆是走廊唯一的操作方式。字級維持不變，
+   * 靠 `min-height` 與左右 padding 把可按範圍撐開，版面看起來一樣。
+   */
   .hall__step {
-    padding: 0.4rem 0.55rem;
+    min-height: 44px;
+    padding: 0.4rem 0.7rem;
     font-size: 0.58rem;
   }
 
-  /* 三顆鈕在窄螢幕會擠掉位置字，START 收成純圖示 */
+  /* 三顆鈕在窄螢幕會擠掉位置字，START 收成純圖示。
+     圖示窄，要另外補 min-width 才有 44 寬——只縮字不縮可按範圍 */
   .hall__step--start {
-    font-size: 0.78rem;
+    min-width: 44px;
     padding: 0.3rem 0.5rem;
+    font-size: 0.78rem;
   }
 
   .hall__step-label {
