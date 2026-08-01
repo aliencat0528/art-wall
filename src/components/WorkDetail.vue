@@ -44,6 +44,22 @@ const imageStyle = computed(() => ({
 // 切到上／下一件就回到 fit：留著上一件的縮放位置，新作品會從某個角落開場
 watch(() => props.work.id, resetZoom)
 
+/**
+ * 上／下一件的**方向**，只為了轉場：+1 往後、-1 往前、0＝剛開啟。
+ *
+ * 方向必須在這裡記，不能從 `work` 的變化反推——`stepWork` 是循環的
+ * （最後一件的下一件是第一件），單看索引從大跳到小會把「往後繞一圈」讀成「往前」。
+ *
+ * 0 是刻意的第三態：剛開啟時沒有「從哪個方向來」，滑進來會跟面板自己的升起打架，
+ * 這時只淡入。
+ */
+const stepDir = ref(0)
+
+function step(delta: number): void {
+  stepDir.value = delta
+  emit('step', delta)
+}
+
 const { categories } = useLibrary()
 const category = computed(() => categoryOf(props.work.category, categories.value))
 
@@ -60,11 +76,11 @@ function onKeydown(event: KeyboardEvent) {
     return
   }
   if (event.key === 'ArrowRight') {
-    emit('step', 1)
+    step(1)
     return
   }
   if (event.key === 'ArrowLeft') {
-    emit('step', -1)
+    step(-1)
     return
   }
   if (event.key !== 'Tab') return
@@ -122,7 +138,7 @@ onBeforeUnmount(() => {
             type="button"
             class="icon-button"
             aria-label="上一件"
-            @click="emit('step', -1)"
+            @click="step(-1)"
           >
             ←
           </button>
@@ -130,7 +146,7 @@ onBeforeUnmount(() => {
             type="button"
             class="icon-button"
             aria-label="下一件"
-            @click="emit('step', 1)"
+            @click="step(1)"
           >
             →
           </button>
@@ -146,7 +162,16 @@ onBeforeUnmount(() => {
         </span>
       </header>
 
-      <div class="detail__body">
+      <!--
+        `key` 綁作品 id：換件時整塊重新掛載，進場動畫才會重播。
+        用重新掛載而不是 `<Transition>` 交叉淡出——兩件作品同時存在時，
+        圖片與文字的高度不同會把面板撐動，讀起來是跳動不是轉場。
+      -->
+      <div
+        :key="work.id"
+        class="detail__body"
+        :class="{ 'is-next': stepDir > 0, 'is-prev': stepDir < 0 }"
+      >
         <figure class="detail__figure">
           <div
             ref="viewport"
@@ -329,6 +354,34 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   gap: clamp(1rem, 3vw, 2.25rem);
   padding: clamp(1rem, 3vw, 2rem);
+  animation: body-in 340ms var(--ease) both;
+}
+
+/**
+ * 換件轉場：新的那件從**它來的方向**滑進來——按「下一件」從右邊來，
+ * 「上一件」從左邊來。方向對得上手勢，才讀得出是往清單的哪一頭走，
+ * 不然兩顆鈕的回饋一模一樣，等於沒有方向感。
+ *
+ * `--dir` 預設 0＝剛開啟，只淡入不滑動（見 `stepDir` 的註解）。
+ * 位移刻意只有 2.2rem：作品是主角，轉場要讓人感覺到換了一件，不是自己表演。
+ */
+.detail__body.is-next {
+  --dir: 1;
+}
+
+.detail__body.is-prev {
+  --dir: -1;
+}
+
+@keyframes body-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--dir, 0) * 2.2rem));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .detail__figure {

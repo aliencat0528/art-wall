@@ -224,3 +224,64 @@ test('窄螢幕走動後不跑版、仍點得開作品', async ({ page }) => {
   await page.locator('.piece[data-index="1"]').click()
   await expect(page.locator('.detail')).toBeVisible()
 })
+
+/**
+ * 疊印霓虹框（MR-019）：走廊沿用牆面那一套雙色光框。
+ *
+ * 測「錯位有沒有保留」而不是「光多亮」——兩道有色邊一旦對齊就重疊成一條白線，
+ * 霓虹感整個消失，而這正是實作時踩過的坑（曾對「當前那一件」做收攏，
+ * 結果越靠近效果越弱）。這是行為不是視覺量值，所以守得住也該守。
+ */
+test('走廊的作品有疊印雙光框，且最近的那件也不會收攏對齊', async ({ page }) => {
+  await enterHall(page)
+
+  const pieces = page.locator('.piece')
+  const count = await pieces.count()
+  expect(count).toBeGreaterThan(0)
+  // 每件作品兩道光框，缺一道就不會有相交加成的白光
+  await expect(page.locator('.piece__reg')).toHaveCount(count * 2)
+
+  const offsets = await page.evaluate(() =>
+    [...document.querySelectorAll('.piece__reg')].map(
+      (el) => getComputedStyle(el).transform,
+    ),
+  )
+  expect(offsets.length).toBeGreaterThan(0)
+  expect(offsets.every((transform) => transform !== 'none')).toBe(true)
+})
+
+/**
+ * 當前那件不會被畫面左右緣切掉（MR-019）。
+ *
+ * **只有走到它面前才會壞**：螢幕上的橫向位移是 `--lateral × 透視縮放`，而縮放只作用
+ * 在當前那件身上，站遠看一切正常。實測 `--lateral: 380` 時橫幅走到面前右緣是 -109px，
+ * 直接缺一角，而既有的「不撐出捲軸」測試抓不到——`.hall__viewport` 是 `overflow: hidden`，
+ * 切掉的部分不會變成捲軸。這條測的是「有沒有被切」，不是「留白夠不夠美」。
+ *
+ * 1280 是最緊的桌機寬度：留白＝螢幕半寬 − 位移 − 作品半寬，而作品尺寸吃的是 `36vh`，
+ * 寬度縮、高度不縮，所以最窄的那個必然最先破。
+ */
+test('走到直幅與橫幅面前，作品都不會被畫面左右緣切掉', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('./?intro=0&v=hall')
+  await expect(page.locator('.hall')).toBeVisible()
+
+  for (const index of [0, 1]) {
+    if (index > 0) {
+      await page.getByRole('button', { name: 'WALK ON →' }).click()
+      await expect(page.locator('.hall__pos')).toContainText(`第 ${index + 1} /`)
+      // 相機補間 720ms，量早了會抓到還在移動中的位置
+      await page.waitForTimeout(900)
+    }
+
+    const gaps = await page.evaluate((i) => {
+      const rect = document
+        .querySelector(`.piece[data-index="${i}"] .piece__mat`)
+        .getBoundingClientRect()
+      return { left: rect.left, right: window.innerWidth - rect.right }
+    }, index)
+
+    expect(gaps.left).toBeGreaterThan(0)
+    expect(gaps.right).toBeGreaterThan(0)
+  }
+})

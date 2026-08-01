@@ -153,12 +153,19 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
-    <WorkDetail
-      v-if="selectedWork"
-      :work="selectedWork"
-      @close="closeWork"
-      @step="stepWork"
-    />
+    <!--
+      只接離場。進場是 `WorkDetail` 自己的 `fade-in`／`panel-in`（本來就有），
+      離場沒人管——`v-if` 一解除就整塊消失，關掉詳情像斷電。
+      這裡不定義 enter 類別，進場那半仍由元件自己負責，兩邊不會疊在一起跑。
+    -->
+    <Transition name="detail">
+      <WorkDetail
+        v-if="selectedWork"
+        :work="selectedWork"
+        @close="closeWork"
+        @step="stepWork"
+      />
+    </Transition>
 
     <EditorPanel
       v-if="editorOpen"
@@ -267,5 +274,27 @@ onBeforeUnmount(() => {
   .app__hint {
     display: none;
   }
+}
+
+/**
+ * 詳情頁離場：背景與面板一起退，面板往下沉一點——與進場的 `panel-in`（往上升）
+ * 互為反向，開與關讀起來是同一個動作的來回。
+ *
+ * 240ms 比進場的 320ms 短：關閉是使用者已經決定好的事，慢慢演只會擋路。
+ */
+.detail-leave-active {
+  transition: opacity 240ms var(--ease);
+}
+
+.detail-leave-active :deep(.detail__panel) {
+  transition: transform 240ms var(--ease);
+}
+
+.detail-leave-to {
+  opacity: 0;
+}
+
+.detail-leave-to :deep(.detail__panel) {
+  transform: translateY(1.2rem);
 }
 </style>

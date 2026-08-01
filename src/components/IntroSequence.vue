@@ -11,7 +11,15 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const emit = defineEmits<{ done: [] }>()
 
-const DURATION = 3400
+/**
+ * `DURATION` 是幾何動畫本身，`LEAVE` 是之後的開門。
+ *
+ * 從 3400 收到 2900：開門比原本的淡出長（520 → 900），不縮的話整段會從 3.9 秒
+ * 變成 4.3 秒，等於為了轉場多擋使用者半秒。2900 剛好落在標題動畫結束（2850）之後，
+ * 沒有截掉任何一段編排。現在全長 3.8 秒，比改之前還短一點。
+ */
+const DURATION = 2900
+const LEAVE = 900
 const leaving = ref(false)
 const skipButton = ref<HTMLButtonElement | null>(null)
 let autoTimer: number | undefined
@@ -20,7 +28,7 @@ let leaveTimer: number | undefined
 function finish() {
   if (leaving.value) return
   leaving.value = true
-  leaveTimer = window.setTimeout(() => emit('done'), 520)
+  leaveTimer = window.setTimeout(() => emit('done'), LEAVE)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -56,6 +64,21 @@ onBeforeUnmount(() => {
     role="presentation"
     @pointerdown="finish"
   >
+    <!--
+      兩片門。**必須排在最前面**：底下所有元素都是 `z-index: auto` 的定位元素，
+      疊放順序就是 DOM 順序，門排前面才會在幾何動畫與標題的下層。
+      刻意不用 z-index——`.intro__title` 的 `mix-blend-mode` 需要跟門在同一個
+      堆疊脈絡裡才混得到，給任何一層 z-index 都會切出新脈絡而讓混色失效。
+    -->
+    <span
+      class="door door--a"
+      aria-hidden="true"
+    />
+    <span
+      class="door door--b"
+      aria-hidden="true"
+    />
+
     <div
       class="intro__stage"
       aria-hidden="true"
@@ -95,14 +118,56 @@ onBeforeUnmount(() => {
   z-index: 100;
   display: grid;
   place-items: center;
-  background: var(--bg);
-  transition: opacity 480ms ease, transform 480ms ease;
+  /* 底色搬到兩片門上——`.intro` 自己要是透明的，門滑開後才看得到底下的作品牆。
+     兩片合起來就是原本那整面底色，開場期間看不出被切開 */
+  background: transparent;
 }
 
 .intro.is-leaving {
-  opacity: 0;
-  transform: translateY(-1.5rem);
   pointer-events: none;
+}
+
+/**
+ * 斜對角開門。
+ *
+ * 沿**主對角線**（左上→右下）把整面底色切成兩個三角形，離場時各自往**另一條
+ * 對角線**的兩端退開。往哪個方向移是唯一有意義的選擇：沿著切線推只是平移，
+ * 縫不會變寬；垂直於切線推才會裂開，那個「兩扇門往兩邊讓開」的讀法就是從這裡來的。
+ *
+ * 90vw/90vh 是「保證退乾淨」的量：三角形最遠的角退到畫面外之後，
+ * 任何長寬比下都不會有殘留（實測 430×932 與 1512×807 兩端都乾淨）。
+ */
+.door {
+  position: absolute;
+  /* 多出來的 1px 蓋掉視窗邊緣的抗鋸齒縫 */
+  inset: -1px;
+  background: var(--bg);
+  transition: transform 740ms cubic-bezier(0.7, 0, 0.3, 1);
+  will-change: transform;
+}
+
+.door--a {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.door--b {
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.intro.is-leaving .door--a {
+  transform: translate(90vw, -90vh);
+}
+
+.intro.is-leaving .door--b {
+  transform: translate(-90vw, 90vh);
+}
+
+/* 門一開始退，畫面上的東西就先讓開——幾何動畫與標題留在原地會擋住剛露出的作品牆 */
+.intro.is-leaving .intro__stage,
+.intro.is-leaving .intro__title,
+.intro.is-leaving .intro__skip {
+  opacity: 0;
+  transition: opacity 200ms ease;
 }
 
 .intro__stage {

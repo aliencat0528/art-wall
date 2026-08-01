@@ -239,6 +239,17 @@ onBeforeUnmount(() => {
               :alt="item.work.alt"
               decoding="async"
             >
+
+            <!-- 疊印框：與牆面同一套語彙（WorkCard 的 card__reg），兩道互補色光框
+                 往反方向錯位，相交處加成出白光 -->
+            <span
+              class="piece__reg piece__reg--a"
+              aria-hidden="true"
+            />
+            <span
+              class="piece__reg piece__reg--b"
+              aria-hidden="true"
+            />
           </span>
           <span class="piece__plate">{{ item.work.title }}</span>
         </button>
@@ -304,7 +315,27 @@ onBeforeUnmount(() => {
    * 改任何一個都要重算這條，不然就會再看到切角。
    */
   --half: 760px;
-  --lateral: 380px;
+  /**
+   * **380 → 300：兩邊都往內靠。**
+   *
+   * 380 有兩個實測問題，都只在「走到那一件面前」才看得到（當前那件被放大 1.32 倍）：
+   *   1280×720 下直幅離左緣只剩 23px，貼著畫面邊
+   *   橫幅走到它面前時右緣是 **-109px**——當前那件直接被切掉一角
+   * 兩者同源：螢幕上的橫向位移是 `--lateral × 縮放`，縮放只作用在當前那件身上，
+   * 所以站遠看都正常，走到面前才穿幫。
+   *
+   * 代價要說清楚：MR-018 記過「近距離感主要來自橫向被推出畫面」，往內靠會削掉一些。
+   * 但「作品被切掉」不是風格取捨，是壞掉——留白讓步給完整度。
+   *
+   * **收到 250 而不是 300，是為了光暈**：300 時 1440×900 的橫幅右緣只剩 20px、
+   * 1280×720 只剩 29px，圖沒被切但外圍那圈光（mat 的 78px ＋ 疊印框的 34px）
+   * 整個貼在畫面邊上，讀起來還是「頂到邊」。留白要留給光，不是只留給圖。
+   *
+   * **決定值的是 1280×720，不是最大的那個螢幕**：橫向留白＝`螢幕半寬 −
+   * lateral × 縮放 − 作品半寬`，螢幕越窄留白越少，而作品尺寸吃的是 `36vh`
+   * 不是螢幕寬——寬度縮、高度不縮，最窄的桌機寬度必然是最緊的那一個。
+   */
+  --lateral: 250px;
   --piece-max-w: 520px;
   /**
    * 高度上限受**走廊淨高**約束，而且**要把透視縮放算進去**（這是踩過的坑）：
@@ -333,7 +364,15 @@ onBeforeUnmount(() => {
    * 寫死 px 在 1280×720 實測作品上緣是 **-3.1%**，整個頭被切掉。
    * `36vh` 在 900 高時是 324、720 高時收到 259，兩邊都塞得下（實測上緣仍 > 8%）。
    */
-  --piece-max-h: min(370px, 36vh);
+  /**
+   * **px 上限 370 → 430，`36vh` 不動**——直幅放大，但只放在放得下的螢幕上。
+   *
+   * 兩個上限各擋一種螢幕，動錯一個就出事：`36vh` 擋矮螢幕，1280×720 下實測作品
+   * 上緣只剩 **9.7%**，已經貼著 mask 的 8% 淡出區，再放大就是「圖被淡掉的頭」；
+   * px 上限擋高螢幕，1080 高時 `36vh` 是 389 卻被 370 硬壓下來，白白浪費一段高度。
+   * 所以只鬆 px 這一邊：矮螢幕仍由 `36vh` 接管，維持原尺寸不受影響。
+   */
+  --piece-max-h: min(430px, 36vh);
 
   position: relative;
   /**
@@ -822,16 +861,63 @@ onBeforeUnmount(() => {
  *   2. 透明底 + 14px padding → **還是黑框**。作品是亮白的，padding 區透出的
  *      牆面再暗一點都會被讀成一圈黑邊，跟背景是什麼顏色無關，是對比造成的
  *
- * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有一條 accent 細線與光暈。
+ * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有光框與光暈。
  * 這與 MR-014「色彩只落在光與外框」是同一條原則——界定邊界的是光，不是色塊。
  */
 .piece__mat {
+  position: relative;
   display: block;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   box-shadow:
     0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
     0 20px 46px rgb(0 0 0 / 0.42);
+}
+
+/**
+ * 疊印霓虹框，**直接沿用牆面那一套**（`WorkCard.vue` 的 `.card__reg`）：兩道互補色
+ * 光框往反方向錯位，`screen` 讓相交處加成出白光＝沒對準的兩塊光版。
+ *
+ * 走廊原本只有 `.piece__mat` 那一條 accent 細線，界定得出邊界但沒有霓虹感。
+ * 沿用同一套而不是另寫一版：牆面與走廊是同一批作品的兩種呈現，
+ * 邊框語彙分岔會讀成兩個站台。
+ *
+ * `--misreg` 是牆面拖曳時寫在軌道上的錯位量（MR-016）；走廊沒有那個手勢，
+ * 取預設 1＝靜止時的原始錯位。刻意保留這個變數而不寫死，
+ * 兩邊的 fallback 值才不會各自漂移。
+ */
+.piece__reg {
+  position: absolute;
+  inset: 0;
+  /* 比牆面粗一階。走廊的作品是透視縮放過的，1px 在遠端會細到看不出顏色，
+     而霓虹感全靠那兩道有色邊——線不見了就只剩一圈白光暈 */
+  border: 2px solid;
+  mix-blend-mode: screen;
+  transition: transform 320ms var(--ease);
+}
+
+.piece__reg--a {
+  border-color: var(--accent);
+  box-shadow: 0 0 34px -3px var(--accent), inset 0 0 26px -8px var(--accent);
+  transform: translate(calc(-9px * var(--misreg, 1)), calc(-8px * var(--misreg, 1)));
+}
+
+.piece__reg--b {
+  border-color: var(--counter);
+  box-shadow: 0 0 34px -3px var(--counter), inset 0 0 26px -8px var(--counter);
+  transform: translate(calc(9px * var(--misreg, 1)), calc(8px * var(--misreg, 1)));
+}
+
+/**
+ * 收攏對準**只給 hover／focus**，不給「當前這一件」。
+ *
+ * 一度把 `.is-current` 也收攏，那是錯的：走到作品面前正是它最大、最該有霓虹的時候，
+ * 一對準兩道有色邊就重疊成一條白線，等於越靠近效果越弱。
+ * 錯位是這個效果的本體，不是「還沒對準」的過渡狀態。
+ */
+.piece:hover .piece__reg,
+.piece:focus-visible .piece__reg {
+  transform: none;
 }
 
 .piece__image {
