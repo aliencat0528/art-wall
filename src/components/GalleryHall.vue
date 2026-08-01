@@ -85,6 +85,8 @@ function walk(delta: number): void {
    *   不是不夠亮，是根本沒播完。
    * - `arriving` 在 **760ms** 觸發，也就是相機補間（720ms）剛停的那一刻。
    *   它要對齊「到了」這件事，不能跟著 `walking` 一起拖到 1700ms。
+   *   持續 **1900ms**——這個數字**必須等於** `piece-arrive` 的動畫長度（見該段 CSS）。
+   *   短了就是同一個坑的翻版：class 先被拔掉，閃爍還沒播完就憑空消失。
    */
   walkTimer = window.setTimeout(() => {
     walking.value = false
@@ -93,7 +95,7 @@ function walk(delta: number): void {
     arriving.value = true
     arriveTimer = window.setTimeout(() => {
       arriving.value = false
-    }, 1100)
+    }, 1900)
   }, 760)
 }
 
@@ -227,7 +229,7 @@ onBeforeUnmount(() => {
             `piece--${item.slot.side}`,
             { 'is-passed': item.passed, 'is-arriving': arriving && item.index === step },
           ]"
-          :style="{ '--depth': `${item.slot.depth}px` }"
+          :style="{ '--depth': `${item.slot.depth}px`, zIndex: total - item.index }"
           :data-index="item.index"
           :aria-label="`開啟作品：${item.work.title}`"
           @click="emit('open', item.work.id)"
@@ -239,6 +241,17 @@ onBeforeUnmount(() => {
               :alt="item.work.alt"
               decoding="async"
             >
+
+            <!-- 疊印框：與牆面同一套語彙（WorkCard 的 card__reg），兩道互補色光框
+                 往反方向錯位，相交處加成出白光 -->
+            <span
+              class="piece__reg piece__reg--a"
+              aria-hidden="true"
+            />
+            <span
+              class="piece__reg piece__reg--b"
+              aria-hidden="true"
+            />
           </span>
           <span class="piece__plate">{{ item.work.title }}</span>
         </button>
@@ -304,7 +317,27 @@ onBeforeUnmount(() => {
    * 改任何一個都要重算這條，不然就會再看到切角。
    */
   --half: 760px;
-  --lateral: 380px;
+  /**
+   * **380 → 300：兩邊都往內靠。**
+   *
+   * 380 有兩個實測問題，都只在「走到那一件面前」才看得到（當前那件被放大 1.32 倍）：
+   *   1280×720 下直幅離左緣只剩 23px，貼著畫面邊
+   *   橫幅走到它面前時右緣是 **-109px**——當前那件直接被切掉一角
+   * 兩者同源：螢幕上的橫向位移是 `--lateral × 縮放`，縮放只作用在當前那件身上，
+   * 所以站遠看都正常，走到面前才穿幫。
+   *
+   * 代價要說清楚：MR-018 記過「近距離感主要來自橫向被推出畫面」，往內靠會削掉一些。
+   * 但「作品被切掉」不是風格取捨，是壞掉——留白讓步給完整度。
+   *
+   * **收到 250 而不是 300，是為了光暈**：300 時 1440×900 的橫幅右緣只剩 20px、
+   * 1280×720 只剩 29px，圖沒被切但外圍那圈光（mat 的 78px ＋ 疊印框的 34px）
+   * 整個貼在畫面邊上，讀起來還是「頂到邊」。留白要留給光，不是只留給圖。
+   *
+   * **決定值的是 1280×720，不是最大的那個螢幕**：橫向留白＝`螢幕半寬 −
+   * lateral × 縮放 − 作品半寬`，螢幕越窄留白越少，而作品尺寸吃的是 `36vh`
+   * 不是螢幕寬——寬度縮、高度不縮，最窄的桌機寬度必然是最緊的那一個。
+   */
+  --lateral: 250px;
   --piece-max-w: 520px;
   /**
    * 高度上限受**走廊淨高**約束，而且**要把透視縮放算進去**（這是踩過的坑）：
@@ -333,7 +366,15 @@ onBeforeUnmount(() => {
    * 寫死 px 在 1280×720 實測作品上緣是 **-3.1%**，整個頭被切掉。
    * `36vh` 在 900 高時是 324、720 高時收到 259，兩邊都塞得下（實測上緣仍 > 8%）。
    */
-  --piece-max-h: min(370px, 36vh);
+  /**
+   * **px 上限 370 → 430，`36vh` 不動**——直幅放大，但只放在放得下的螢幕上。
+   *
+   * 兩個上限各擋一種螢幕，動錯一個就出事：`36vh` 擋矮螢幕，1280×720 下實測作品
+   * 上緣只剩 **9.7%**，已經貼著 mask 的 8% 淡出區，再放大就是「圖被淡掉的頭」；
+   * px 上限擋高螢幕，1080 高時 `36vh` 是 389 卻被 370 硬壓下來，白白浪費一段高度。
+   * 所以只鬆 px 這一邊：矮螢幕仍由 `36vh` 接管，維持原尺寸不受影響。
+   */
+  --piece-max-h: min(430px, 36vh);
 
   position: relative;
   /**
@@ -785,6 +826,17 @@ onBeforeUnmount(() => {
  * 順帶解掉待討論 #6（鎖寬還是鎖高）：正對螢幕之後 width/height 都是真實螢幕尺寸，
  * 直接給一個上限框、比例自己跑就好，不必二選一，也不裁切。
  */
+/**
+ * `z-index` 由深度倒著給（近的高），寫在 template 的 inline style 上。
+ *
+ * **畫面本來就是對的，壞的是命中測試**：`.piece__reg` 的 `mix-blend-mode` 會讓
+ * 3D 子樹在做 hit-test 時被壓平，於是改用 DOM 順序決定誰先被打到——遠處那件排在
+ * 後面就贏了。實測：走到第 2 件時點它，被第 4 件的 `.piece__image` 攔掉
+ * （它就落在消失點附近，剛好在當前那件的正中央），而畫面上完全看不出來。
+ *
+ * 窄螢幕才重現得出來，因為作品接近置中；寬螢幕上兩件的螢幕投影錯得夠開。
+ * 給了 z-index 之後命中順序與畫面順序一致，兩邊都不再靠運氣。
+ */
 .piece {
   position: absolute;
   left: 50%;
@@ -822,16 +874,72 @@ onBeforeUnmount(() => {
  *   2. 透明底 + 14px padding → **還是黑框**。作品是亮白的，padding 區透出的
  *      牆面再暗一點都會被讀成一圈黑邊，跟背景是什麼顏色無關，是對比造成的
  *
- * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有一條 accent 細線與光暈。
+ * 所以 padding 直接歸零：圖片邊緣就是邊界，外面只有光框與光暈。
  * 這與 MR-014「色彩只落在光與外框」是同一條原則——界定邊界的是光，不是色塊。
  */
 .piece__mat {
+  position: relative;
   display: block;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   box-shadow:
     0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
     0 20px 46px rgb(0 0 0 / 0.42);
+}
+
+/**
+ * 疊印霓虹框，**直接沿用牆面那一套**（`WorkCard.vue` 的 `.card__reg`）：兩道互補色
+ * 光框往反方向錯位，`screen` 讓相交處加成出白光＝沒對準的兩塊光版。
+ *
+ * 走廊原本只有 `.piece__mat` 那一條 accent 細線，界定得出邊界但沒有霓虹感。
+ * 沿用同一套而不是另寫一版：牆面與走廊是同一批作品的兩種呈現，
+ * 邊框語彙分岔會讀成兩個站台。
+ *
+ * `--misreg` 是牆面拖曳時寫在軌道上的錯位量（MR-016）；走廊沒有那個手勢，
+ * 取預設 1＝靜止時的原始錯位。刻意保留這個變數而不寫死，
+ * 兩邊的 fallback 值才不會各自漂移。
+ */
+.piece__reg {
+  position: absolute;
+  inset: 0;
+  /**
+   * **純裝飾，絕不能接指標事件。**
+   *
+   * 牆面那套不需要這一行，走廊需要——這裡是 3D 場景，遠處那件的光框在螢幕空間
+   * 會蓋到近處的作品上。實測：第 3 件的 `.piece__reg--b` 攔掉第 1 件的點擊，
+   * 「作品點得開」（MR-017 三條硬要求之一）直接破功，而且只在窄螢幕重現得出來
+   * ——寬螢幕上兩件的螢幕投影剛好不重疊。
+   */
+  pointer-events: none;
+  /* 比牆面粗一階。走廊的作品是透視縮放過的，1px 在遠端會細到看不出顏色，
+     而霓虹感全靠那兩道有色邊——線不見了就只剩一圈白光暈 */
+  border: 2px solid;
+  mix-blend-mode: screen;
+  transition: transform 320ms var(--ease);
+}
+
+.piece__reg--a {
+  border-color: var(--accent);
+  box-shadow: 0 0 34px -3px var(--accent), inset 0 0 26px -8px var(--accent);
+  transform: translate(calc(-9px * var(--misreg, 1)), calc(-8px * var(--misreg, 1)));
+}
+
+.piece__reg--b {
+  border-color: var(--counter);
+  box-shadow: 0 0 34px -3px var(--counter), inset 0 0 26px -8px var(--counter);
+  transform: translate(calc(9px * var(--misreg, 1)), calc(8px * var(--misreg, 1)));
+}
+
+/**
+ * 收攏對準**只給 hover／focus**，不給「當前這一件」。
+ *
+ * 一度把 `.is-current` 也收攏，那是錯的：走到作品面前正是它最大、最該有霓虹的時候，
+ * 一對準兩道有色邊就重疊成一條白線，等於越靠近效果越弱。
+ * 錯位是這個效果的本體，不是「還沒對準」的過渡狀態。
+ */
+.piece:hover .piece__reg,
+.piece:focus-visible .piece__reg {
+  transform: none;
 }
 
 .piece__image {
@@ -879,12 +987,47 @@ onBeforeUnmount(() => {
  * 用 class 切換而不是 `:key` 重建：作品是圖片，重建會重新解碼一次。
  * class 加上去就會從頭播動畫，這裡剛好夠用。
  */
+/**
+ * 抵達脈衝：**閃四下再收，不是亮一下**（1.9s，原本 1.1s 單次）。
+ *
+ * 單次脈衝讀起來像「亮度變了一下」，多次閃爍才讀得出是霓虹管點亮——
+ * 疊印框已經是霓虹語彙，抵達回饋跟著同一套才不會各說各話。
+ *
+ * **間隔刻意不等距**（8/20/38/60%，越後面越疏）：等距會讀成機械式的閃爍指示燈，
+ * 由密到疏才是「點著了、穩下來」。最後從 60% 收到 100% 有 760ms 慢慢暗回去，
+ * 收尾比啟動慢，不然會像被人關掉。
+ *
+ * ⚠️ **動畫長度改了，JS 那邊的 `arriving` 時窗必須一起改**（見 `walk()` 裡的
+ * 1900ms）。兩者不同步就會重演「光帶跑到一半被移除」那個 bug——class 先被拔掉，
+ * 動畫還沒播完就憑空消失。
+ */
 .piece.is-arriving .piece__mat {
-  animation: piece-arrive 1.1s var(--ease);
+  animation: piece-arrive 1.9s var(--ease);
 }
 
 @keyframes piece-arrive {
-  30% {
+  0%,
+  14%,
+  26%,
+  44%,
+  100% {
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow:
+      0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
+
+  /* 第二下刻意只亮到一半——四下都全亮會讀成規律閃爍，不是點亮的過程 */
+  20% {
+    border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+    box-shadow:
+      0 0 104px -2px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
+
+  8%,
+  38%,
+  60% {
     border-color: color-mix(in srgb, var(--accent) 85%, transparent);
     box-shadow:
       0 0 132px 2px color-mix(in srgb, var(--accent) 88%, transparent),
@@ -992,11 +1135,30 @@ onBeforeUnmount(() => {
  */
 @media (max-width: 899px) {
   .hall {
-    /* 同樣要滿足上面那條不等式：190 + (260+28)/2 = 334 < 380 */
+    /**
+     * ⚠️ **這裡由第三條不等式（作品撞畫面）決定，不是由撞牆那條**（MR-019）。
+     *
+     * 舊值 `--lateral: 190` / `--piece-max-w: 260` 撞牆那條算得漂亮
+     * （190 + 130 = 320 < 380），但 390×844 實測直幅左緣 **−202px**、
+     * 橫幅右緣 **−296px**——當前那件有一大半在畫面外。後果不只是難看：
+     * 元素中心點落到視窗外，**Playwright 點不到，真人也點不到**，
+     * 直接違反 MR-017 自己列的三條硬要求之一「作品點得開」。
+     *
+     * 手機的算式解不出「既保留左右交錯、作品又夠大」：360 寬時螢幕半寬只有 180，
+     * 光是舊的 `--piece-max-w: 260` 換算到螢幕就是 343px（×1.32 透視縮放），
+     * 比整個螢幕還寬——**就算 `--lateral` 收到 0 也塞不下**。
+     * 所以兩個都得收：作品縮到螢幕的三分之二，左右偏移只留一點暗示。
+     *
+     * 收完等於「幾乎置中、一次看一件」——這正是 MR-017 講的降級樣貌，
+     * 只是先前的值沒有真的收到那個程度。
+     *
+     * **基準取 360 寬不是 390**：iPhone SE 與多數 Android 是 360，
+     * 390 過關但 360 還差 14px，就等於一整批機型仍然踩得到。窄的那個才是要滿足的。
+     */
     --half: 380px;
-    --lateral: 190px;
-    --piece-max-w: 260px;
-    --piece-max-h: 200px;
+    --lateral: 20px;
+    --piece-max-w: 160px;
+    --piece-max-h: 190px;
   }
 
   .hall__viewport {
