@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Exhibition, FilterId, Work } from '@/types'
 import { useLibrary } from '@/composables/useLibrary'
 
@@ -31,7 +31,7 @@ const activeCategory = ref<FilterId>('all')
 const activeExhibitionId = ref<string | null>(null)
 const selectedId = ref<string | null>(null)
 
-const { allWorks, categories, exhibitions } = useLibrary()
+const { allWorks, categories, exhibitions, ready } = useLibrary()
 
 const activeExhibition = computed<Exhibition | null>(
   () => exhibitions.value.find((exhibition) => exhibition.id === activeExhibitionId.value) ?? null,
@@ -84,25 +84,80 @@ function buildUrl(): string {
   return `${window.location.pathname}${query ? `?${query}` : ''}`
 }
 
+/**
+ * 把目前選取對回持久層，對不上就退到看得到作品的狀態。
+ *
+ * 蓋掉兩個各自獨立、但成因相同的坑：
+ *
+ * 1. **刪掉正在看的展覽會走進死路。** `removeExhibition` 只動清單，
+ *    `viewMode` 與 `activeExhibitionId` 都留在原地，`filteredWorks` 於是永遠是空的。
+ *    更糟的是站頭那排「依媒材／依展覽」是 `v-if="exhibitions.length > 0"`——
+ *    刪掉最後一個展覽，切回依媒材的按鈕本身也一起消失，**畫面上沒有任何出口**；
+ *    而網址還留著 `m=ex&ex=<已刪除>`，重新整理照樣回到同一個空畫面。
+ * 2. **展覽深連結過不了重新整理。** 原本在 `readUrl` 就拿 `exhibitions` 驗 id，
+ *    但那時 IndexedDB 還沒載完、清單是空的，於是**每一個**展覽連結都被判成無效而清掉。
+ *    這正好打掉檔頭寫的「展覽要能被分享」。
+ *
+ * 兩者的解是同一個：**網址上的 id 先原封不動收下，等 `ready` 之後才判定存不存在**。
+ * 這和同檔 `selectedId` 的作法一致（「找不到就是 null」，載完自然接上），
+ * 展覽與分類先前只是漏掉了這一步。
+ */
+function reconcile(): void {
+  // 還沒載完就談不上「不存在」——這個 return 就是深連結不再被誤殺的原因
+  if (!ready.value) return
+
+  let changed = false
+
+  if (viewMode.value === 'exhibition') {
+    const alive =
+      !!activeExhibitionId.value &&
+      exhibitions.value.some((item) => item.id === activeExhibitionId.value)
+    if (!alive) {
+      if (exhibitions.value.length > 0) {
+        // 還有別的展覽就接到第一個——與 `setMode` 進展覽模式時的作法一致
+        activeExhibitionId.value = exhibitions.value[0].id
+      } else {
+        viewMode.value = 'category'
+        activeExhibitionId.value = null
+        activeCategory.value = 'all'
+      }
+      selectedId.value = null
+      changed = true
+    }
+  } else if (
+    activeCategory.value !== 'all' &&
+    !categories.value.some((item) => item.id === activeCategory.value)
+  ) {
+    // 自訂分類被刪掉時同理。這一邊不是死路（「全部」一直都在），
+    // 但停在一個不存在的篩選上仍然只會看到空畫面
+    activeCategory.value = 'all'
+    changed = true
+  }
+
+  // 順手把已經失效的 id 從網址上抹掉，否則分享出去的仍是那個空畫面
+  if (changed) window.history.replaceState(null, '', buildUrl())
+}
+
 function readUrl(): void {
   const params = new URLSearchParams(window.location.search)
   if (params.get('m') === 'ex') {
     viewMode.value = 'exhibition'
-    const exhibition = params.get('ex')
-    activeExhibitionId.value =
-      exhibition && exhibitions.value.some((item) => item.id === exhibition) ? exhibition : null
+    // 不在這裡驗——載入當下清單還是空的，驗了就等於把所有展覽連結都丟掉（見 reconcile）
+    activeExhibitionId.value = params.get('ex')
     activeCategory.value = 'all'
   } else {
     viewMode.value = 'category'
     activeExhibitionId.value = null
-    const category = params.get('c')
-    // 分類已可自訂，改以合併清單即時驗證，而非寫死的集合
-    const known = !!category && categories.value.some((item) => item.id === category)
-    activeCategory.value = known ? (category as FilterId) : 'all'
+    activeCategory.value = (params.get('c') as FilterId | null) ?? 'all'
   }
   layout.value = params.get('v') === 'hall' ? 'hall' : 'wall'
   selectedId.value = params.get('w')
+  // 已經載完（上一頁／下一頁走到這裡）就當場對帳；還沒載完交給下面的 watch
+  reconcile()
 }
+
+/** 載入完成、以及之後每一次增刪展覽／分類，都重對一次 */
+watch([ready, exhibitions, categories], reconcile)
 
 export function useGallery() {
   function setCategory(id: FilterId): void {

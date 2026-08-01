@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { IDBFactory } from 'fake-indexeddb'
 
 /**
@@ -148,7 +149,10 @@ describe('useGallery', () => {
 
     it('分類代號不合法時退回 all，不是留著壞值', async () => {
       const gallery = await freshGallery('?c=不存在的分類')
+      const { useLibrary } = await import('@/composables/useLibrary')
       gallery.syncFromUrl()
+      // 對帳刻意等到持久層載完才判定「不存在」——分類可自訂，載完前的清單不算數
+      await useLibrary().init()
 
       expect(gallery.activeCategory.value).toBe('all')
       expect(gallery.filteredWorks.value.length).toBeGreaterThan(0)
@@ -164,10 +168,17 @@ describe('useGallery', () => {
   })
 
   describe('展覽模式（依展覽）', () => {
+    /**
+     * **先 `init()` 再新增展覽**：`useGallery` 的對帳只在 `ready` 之後才判定
+     * 「這個展覽不存在」（否則 IndexedDB 還沒載完就會把所有展覽深連結誤殺）。
+     * 少了這一步，刪除與深連結那幾條都測不到真正的行為。
+     */
     async function withExhibition(workIds: string[], id = 'ex-1') {
       const gallery = await freshGallery()
       const { useLibrary } = await import('@/composables/useLibrary')
-      useLibrary().addExhibition({ id, title: '首展', preface: '開場白', workIds })
+      const library = useLibrary()
+      await library.init()
+      library.addExhibition({ id, title: '首展', preface: '開場白', workIds })
       return gallery
     }
 
@@ -222,14 +233,72 @@ describe('useGallery', () => {
       expect(gallery.filteredWorks.value.map((w) => w.id)).toEqual(['acr-001', 'wtc-001'])
     })
 
-    it('深連結到不存在的展覽 id 退回無選定，不留壞值', async () => {
+    it('深連結到不存在的展覽 id 會接到還在的第一個展覽，不停在空畫面', async () => {
       const gallery = await withExhibition(['acr-001'])
       window.history.replaceState(null, '', '/?m=ex&ex=nope')
       gallery.syncFromUrl()
 
       expect(gallery.viewMode.value).toBe('exhibition')
+      expect(gallery.activeExhibitionId.value).toBe('ex-1')
+      expect(gallery.filteredWorks.value.map((w) => w.id)).toEqual(['acr-001'])
+      // 壞掉的 id 也要從網址上抹掉，否則分享出去的還是同一個壞連結
+      expect(query()).toBe('?m=ex&ex=ex-1')
+    })
+
+    /**
+     * 這條擋的是「展覽連結過不了重新整理」：`syncFromUrl` 在 IndexedDB 載完前跑，
+     * 那時展覽清單還是空的。舊版在這裡就拿清單驗 id，於是**每一個**展覽連結
+     * 都被判成無效而清掉；載完之後也接不回來。
+     */
+    it('展覽深連結在持久層載完前不被清掉，載完就接得回來', async () => {
+      await withExhibition(['acr-001'])
+
+      // 模擬重新整理：狀態全部重來，且 syncFromUrl 早於 init（App.vue 的真實順序）
+      const reloaded = await freshGallery('?m=ex&ex=ex-1')
+      const library = (await import('@/composables/useLibrary')).useLibrary()
+      reloaded.syncFromUrl()
+      // 載完之前 id 必須原封不動留著，這一行就是舊版掉連結的地方
+      expect(reloaded.activeExhibitionId.value).toBe('ex-1')
+
+      await library.init()
+      expect(reloaded.filteredWorks.value.map((w) => w.id)).toEqual(['acr-001'])
+    })
+
+    it('刪掉正在看的展覽後接到下一個，不會停在空畫面', async () => {
+      const gallery = await withExhibition(['acr-001'])
+      const { useLibrary } = await import('@/composables/useLibrary')
+      const library = useLibrary()
+      library.addExhibition({ id: 'ex-2', title: '二展', preface: '', workIds: ['wtc-001'] })
+      gallery.setExhibition('ex-1')
+
+      library.removeExhibition('ex-1')
+      // 對帳走 watch，是非同步 flush 的——真實畫面上就是下一個 tick 修正
+      await nextTick()
+
+      expect(gallery.activeExhibitionId.value).toBe('ex-2')
+      expect(gallery.filteredWorks.value.map((w) => w.id)).toEqual(['wtc-001'])
+    })
+
+    /**
+     * 最後一個展覽被刪掉時**一定要退回依媒材**：站頭那排「依媒材／依展覽」是
+     * `v-if="exhibitions.length > 0"`，展覽歸零時按鈕本身也消失。
+     * 若還留在展覽模式，畫面上就沒有任何回得去的出口，而網址還帶著 `m=ex`，
+     * 重新整理也是同一個空畫面——那是走不出去的死路。
+     */
+    it('刪掉最後一個展覽會退回依媒材，並清掉網址上的展覽參數', async () => {
+      const gallery = await withExhibition(['acr-001'])
+      const { useLibrary } = await import('@/composables/useLibrary')
+      gallery.setMode('exhibition')
+      expect(query()).toBe('?m=ex&ex=ex-1')
+
+      useLibrary().removeExhibition('ex-1')
+      await nextTick()
+
+      expect(gallery.viewMode.value).toBe('category')
       expect(gallery.activeExhibitionId.value).toBeNull()
-      expect(gallery.filteredWorks.value).toEqual([])
+      expect(gallery.activeCategory.value).toBe('all')
+      expect(gallery.filteredWorks.value.length).toBeGreaterThan(0)
+      expect(query()).toBe('')
     })
   })
 
