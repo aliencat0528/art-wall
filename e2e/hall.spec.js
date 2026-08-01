@@ -261,27 +261,39 @@ test('走廊的作品有疊印雙光框，且最近的那件也不會收攏對�
  * 1280 是最緊的桌機寬度：留白＝螢幕半寬 − 位移 − 作品半寬，而作品尺寸吃的是 `36vh`，
  * 寬度縮、高度不縮，所以最窄的那個必然最先破。
  */
-test('走到直幅與橫幅面前，作品都不會被畫面左右緣切掉', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 })
-  await page.goto('./?intro=0&v=hall')
-  await expect(page.locator('.hall')).toBeVisible()
+const CLIP_SIZES = [
+  // 最窄的桌機寬度
+  { width: 1280, height: 720 },
+  // iPhone SE 與多數 Android。390 過關但 360 還差 14px，窄的那個才是要滿足的
+  { width: 360, height: 780 },
+]
 
-  for (const index of [0, 1]) {
-    if (index > 0) {
-      await page.getByRole('button', { name: 'WALK ON →' }).click()
-      await expect(page.locator('.hall__pos')).toContainText(`第 ${index + 1} /`)
-      // 相機補間 720ms，量早了會抓到還在移動中的位置
-      await page.waitForTimeout(900)
+for (const size of CLIP_SIZES) {
+  test(`走到直幅與橫幅面前，作品都不會被畫面左右緣切掉（${size.width}×${size.height}）`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size)
+    await page.goto('./?intro=0&v=hall')
+    await expect(page.locator('.hall')).toBeVisible()
+
+    for (const index of [0, 1]) {
+      if (index > 0) {
+        await page.getByRole('button', { name: 'WALK ON →' }).click()
+        await expect(page.locator('.hall__pos')).toContainText(`第 ${index + 1} /`)
+        // 相機補間 720ms，量早了會抓到還在移動中的位置
+        await page.waitForTimeout(900)
+      }
+
+      const gaps = await page.evaluate((i) => {
+        const rect = document
+          .querySelector(`.piece[data-index="${i}"] .piece__mat`)
+          .getBoundingClientRect()
+        return { left: rect.left, right: window.innerWidth - rect.right }
+      }, index)
+
+      expect(gaps.left).toBeGreaterThan(0)
+      expect(gaps.right).toBeGreaterThan(0)
     }
+  })
+}
 
-    const gaps = await page.evaluate((i) => {
-      const rect = document
-        .querySelector(`.piece[data-index="${i}"] .piece__mat`)
-        .getBoundingClientRect()
-      return { left: rect.left, right: window.innerWidth - rect.right }
-    }, index)
-
-    expect(gaps.left).toBeGreaterThan(0)
-    expect(gaps.right).toBeGreaterThan(0)
-  }
-})

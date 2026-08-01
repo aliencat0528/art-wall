@@ -85,6 +85,8 @@ function walk(delta: number): void {
    *   不是不夠亮，是根本沒播完。
    * - `arriving` 在 **760ms** 觸發，也就是相機補間（720ms）剛停的那一刻。
    *   它要對齊「到了」這件事，不能跟著 `walking` 一起拖到 1700ms。
+   *   持續 **1900ms**——這個數字**必須等於** `piece-arrive` 的動畫長度（見該段 CSS）。
+   *   短了就是同一個坑的翻版：class 先被拔掉，閃爍還沒播完就憑空消失。
    */
   walkTimer = window.setTimeout(() => {
     walking.value = false
@@ -93,7 +95,7 @@ function walk(delta: number): void {
     arriving.value = true
     arriveTimer = window.setTimeout(() => {
       arriving.value = false
-    }, 1100)
+    }, 1900)
   }, 760)
 }
 
@@ -227,7 +229,7 @@ onBeforeUnmount(() => {
             `piece--${item.slot.side}`,
             { 'is-passed': item.passed, 'is-arriving': arriving && item.index === step },
           ]"
-          :style="{ '--depth': `${item.slot.depth}px` }"
+          :style="{ '--depth': `${item.slot.depth}px`, zIndex: total - item.index }"
           :data-index="item.index"
           :aria-label="`開啟作品：${item.work.title}`"
           @click="emit('open', item.work.id)"
@@ -824,6 +826,17 @@ onBeforeUnmount(() => {
  * 順帶解掉待討論 #6（鎖寬還是鎖高）：正對螢幕之後 width/height 都是真實螢幕尺寸，
  * 直接給一個上限框、比例自己跑就好，不必二選一，也不裁切。
  */
+/**
+ * `z-index` 由深度倒著給（近的高），寫在 template 的 inline style 上。
+ *
+ * **畫面本來就是對的，壞的是命中測試**：`.piece__reg` 的 `mix-blend-mode` 會讓
+ * 3D 子樹在做 hit-test 時被壓平，於是改用 DOM 順序決定誰先被打到——遠處那件排在
+ * 後面就贏了。實測：走到第 2 件時點它，被第 4 件的 `.piece__image` 攔掉
+ * （它就落在消失點附近，剛好在當前那件的正中央），而畫面上完全看不出來。
+ *
+ * 窄螢幕才重現得出來，因為作品接近置中；寬螢幕上兩件的螢幕投影錯得夠開。
+ * 給了 z-index 之後命中順序與畫面順序一致，兩邊都不再靠運氣。
+ */
 .piece {
   position: absolute;
   left: 50%;
@@ -889,6 +902,15 @@ onBeforeUnmount(() => {
 .piece__reg {
   position: absolute;
   inset: 0;
+  /**
+   * **純裝飾，絕不能接指標事件。**
+   *
+   * 牆面那套不需要這一行，走廊需要——這裡是 3D 場景，遠處那件的光框在螢幕空間
+   * 會蓋到近處的作品上。實測：第 3 件的 `.piece__reg--b` 攔掉第 1 件的點擊，
+   * 「作品點得開」（MR-017 三條硬要求之一）直接破功，而且只在窄螢幕重現得出來
+   * ——寬螢幕上兩件的螢幕投影剛好不重疊。
+   */
+  pointer-events: none;
   /* 比牆面粗一階。走廊的作品是透視縮放過的，1px 在遠端會細到看不出顏色，
      而霓虹感全靠那兩道有色邊——線不見了就只剩一圈白光暈 */
   border: 2px solid;
@@ -965,12 +987,47 @@ onBeforeUnmount(() => {
  * 用 class 切換而不是 `:key` 重建：作品是圖片，重建會重新解碼一次。
  * class 加上去就會從頭播動畫，這裡剛好夠用。
  */
+/**
+ * 抵達脈衝：**閃四下再收，不是亮一下**（1.9s，原本 1.1s 單次）。
+ *
+ * 單次脈衝讀起來像「亮度變了一下」，多次閃爍才讀得出是霓虹管點亮——
+ * 疊印框已經是霓虹語彙，抵達回饋跟著同一套才不會各說各話。
+ *
+ * **間隔刻意不等距**（8/20/38/60%，越後面越疏）：等距會讀成機械式的閃爍指示燈，
+ * 由密到疏才是「點著了、穩下來」。最後從 60% 收到 100% 有 760ms 慢慢暗回去，
+ * 收尾比啟動慢，不然會像被人關掉。
+ *
+ * ⚠️ **動畫長度改了，JS 那邊的 `arriving` 時窗必須一起改**（見 `walk()` 裡的
+ * 1900ms）。兩者不同步就會重演「光帶跑到一半被移除」那個 bug——class 先被拔掉，
+ * 動畫還沒播完就憑空消失。
+ */
 .piece.is-arriving .piece__mat {
-  animation: piece-arrive 1.1s var(--ease);
+  animation: piece-arrive 1.9s var(--ease);
 }
 
 @keyframes piece-arrive {
-  30% {
+  0%,
+  14%,
+  26%,
+  44%,
+  100% {
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow:
+      0 0 78px -6px color-mix(in srgb, var(--accent) 55%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
+
+  /* 第二下刻意只亮到一半——四下都全亮會讀成規律閃爍，不是點亮的過程 */
+  20% {
+    border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+    box-shadow:
+      0 0 104px -2px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 20px 46px rgb(0 0 0 / 0.42);
+  }
+
+  8%,
+  38%,
+  60% {
     border-color: color-mix(in srgb, var(--accent) 85%, transparent);
     box-shadow:
       0 0 132px 2px color-mix(in srgb, var(--accent) 88%, transparent),
@@ -1078,11 +1135,30 @@ onBeforeUnmount(() => {
  */
 @media (max-width: 899px) {
   .hall {
-    /* 同樣要滿足上面那條不等式：190 + (260+28)/2 = 334 < 380 */
+    /**
+     * ⚠️ **這裡由第三條不等式（作品撞畫面）決定，不是由撞牆那條**（MR-019）。
+     *
+     * 舊值 `--lateral: 190` / `--piece-max-w: 260` 撞牆那條算得漂亮
+     * （190 + 130 = 320 < 380），但 390×844 實測直幅左緣 **−202px**、
+     * 橫幅右緣 **−296px**——當前那件有一大半在畫面外。後果不只是難看：
+     * 元素中心點落到視窗外，**Playwright 點不到，真人也點不到**，
+     * 直接違反 MR-017 自己列的三條硬要求之一「作品點得開」。
+     *
+     * 手機的算式解不出「既保留左右交錯、作品又夠大」：360 寬時螢幕半寬只有 180，
+     * 光是舊的 `--piece-max-w: 260` 換算到螢幕就是 343px（×1.32 透視縮放），
+     * 比整個螢幕還寬——**就算 `--lateral` 收到 0 也塞不下**。
+     * 所以兩個都得收：作品縮到螢幕的三分之二，左右偏移只留一點暗示。
+     *
+     * 收完等於「幾乎置中、一次看一件」——這正是 MR-017 講的降級樣貌，
+     * 只是先前的值沒有真的收到那個程度。
+     *
+     * **基準取 360 寬不是 390**：iPhone SE 與多數 Android 是 360，
+     * 390 過關但 360 還差 14px，就等於一整批機型仍然踩得到。窄的那個才是要滿足的。
+     */
     --half: 380px;
-    --lateral: 190px;
-    --piece-max-w: 260px;
-    --piece-max-h: 200px;
+    --lateral: 20px;
+    --piece-max-w: 160px;
+    --piece-max-h: 190px;
   }
 
   .hall__viewport {
