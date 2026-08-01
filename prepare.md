@@ -36,12 +36,22 @@
 
 > 只記當下狀態；定案理由在下方決策日誌。過期就刪。
 
-**Phase G 已完成並上線。** `main` = PR #22 merge 後的狀態，GitHub Pages 已重新部署成功。
+**Phase G 已完成並上線。** `main` = PR #23 merge 後的狀態，GitHub Pages 已重新部署成功。
 走廊＝第三種呈現方式（`?v=hall`），作品正對螢幕、暗場、光波地板、手機接受降級。
 
-**保留不刪的分支**：`feature/hall-landscape-thirteenth`（鎖高版，遠端也在）。
-被 MR-018 取代而作廢，留著當走過的路的證據。
-※ 就算刪了歷史也在：`833e7f7` 與其 revert `4bee76f` 都是 `main` 的祖先。
+**分支收斂為只有 `main`**（2026-08-01）。原「保留不刪」的
+`feature/hall-landscape-thirteenth`（鎖高版，被 MR-018 取代而作廢）改為
+**annotated tag `hall-landscape-thirteenth`**，本機與遠端分支皆已刪除。
+要看走過的路：`git show hall-landscape-thirteenth`；要接續開發：
+`git switch -c <新分支> hall-landscape-thirteenth`。
+
+※ 訂正舊記載「就算刪了歷史也在」——該句只對分支**起點**成立。`833e7f7` 與其 revert
+`4bee76f` 確實是 `main` 的祖先，但分支**頂端** `a19fff6`（房間跟著相機走）**不是**，
+直接刪分支那顆就只剩 reflog。故改用 tag：tag 是 ref，commit 沿 parent 鏈全部可達，
+不會被 GC。tag 必須先 `git push origin <tag>` 再刪遠端分支，否則遠端那顆會變不可達。
+`a19fff6` 的內容本身已在 `main` 有等價實作（`roomSpan()` 已移除、房間四個面都帶
+`translateZ(calc(var(--cam) * -1))`、`e2e/editor.spec.js` 的上傳等待亦已收進 `createWork()`），
+只是不同顆 commit，`git cherry` 會因 patch-id 不同而誤報「不在 main」。
 
 **⚠️ 一條不穩定的測試，尚未解**：`e2e/atmosphere.spec.js` 的
 「拖曳長廊會推開套色錯位，放手收回」——`--misreg` 卡在 1.03 五秒不動（期望 < 1.02）。
